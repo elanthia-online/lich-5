@@ -3,8 +3,12 @@
 #   Create prerelease tags/releases on pushes to pre/*, then package/upload
 #   core archives and attach the latest optional Ruby4Lich5 Windows installer.
 #   production-formatted release body/title as early as possible.
+#   The release is converted to a DRAFT as soon as it is created and stays
+#   flagged as a prerelease; a person publishes it.
 #
 # INVARIANTS
+# - The release is a DRAFT (not public) until a person publishes it via the
+#   GitHub UI/CLI, and it is still a prerelease when published.
 # - Release body/title must be finalized *before* packaging begins.
 # - No reliance on a local git checkout for GH release edits/uploads.
 # - PR labels 'skip-installer' or 'no-installer' gate installer attachment (case-insensitive).
@@ -69,6 +73,19 @@ jobs:
         run: |
           echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
           echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+
+      # Convert the release to a draft right away, before anything else, so the
+      # beta is not public until a person publishes it. --prerelease keeps it
+      # flagged as a prerelease when that happens. The title/body edit and the
+      # asset uploads below find the draft by its tag.
+      - name: Convert release to draft
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft --prerelease
 
       # --- FAST-PATH: Fix release title/body immediately after RP creates it ---
       # Rationale: minimize user-visible lag by updating before any packaging/upload.

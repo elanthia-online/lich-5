@@ -75,10 +75,26 @@ jobs:
     env:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     steps:
+      # Curated PRs can change workflow files, and the built-in token is never
+      # allowed to push those. Mint a token from the org GitHub App that is. The
+      # run stops here when the token cannot be minted; there is no fallback.
+      - name: Mint a curate token from the org GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+
+      # Checkout keeps this token for the rest of the job, so every later git
+      # fetch and push authenticates with it, including the destination branch
+      # push and the anchor tag force-push.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
@@ -96,6 +112,8 @@ jobs:
 
       - name: Curate pre-branch
         env:
+          # Used only to read PR metadata from the API. Git fetches and pushes
+          # use the App token that checkout kept.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           DESTINATION: ${{ inputs.destination }}

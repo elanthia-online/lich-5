@@ -63,9 +63,9 @@ jobs:
               if (!hit) throw new Error('No stable release found');
               return hit;
             }
-            async function latestPrerelease() {
+            async function latestPrerelease(includeDraft = false) {
               const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
-              const hit = (data || []).find(r => !r.draft && !!r.prerelease);
+              const hit = (data || []).find(r => !!r.prerelease && (includeDraft || !r.draft));
               if (!hit) throw new Error('No prerelease found');
               return hit;
             }
@@ -80,7 +80,8 @@ jobs:
             } else if (ev === 'workflow_run') {
               // Infer target channel from the upstream workflow name
               const wantPrerelease = /prerelease/i.test(wfName);
-              try { rel = wantPrerelease ? await latestPrerelease() : await latestStable(true); } catch (e) {
+              // Both upstream workflows leave the release they create as a draft.
+              try { rel = wantPrerelease ? await latestPrerelease(true) : await latestStable(true); } catch (e) {
                 core.setFailed(`Could not resolve a ${wantPrerelease ? 'prerelease' : 'stable'} release: ${e.message}`); return;
               }
             } else {

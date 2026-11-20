@@ -378,6 +378,9 @@ handle_merge_conflict() {
     git add -u
 
     check_union_merge_has_changes "merge"
+  elif [[ "$GIT_STRATEGY_FLAG" == "-X theirs" ]] && resolve_modify_delete_theirs; then
+    # Only modify/delete conflicts were left, and each went to the PR's side.
+    log_warn "Resolved modify/delete conflicts for $context in favor of the PR"
   else
     merge_abort
     die "Merge conflicts for $context. Use conflict_strategy=union or fix manually."
@@ -501,4 +504,7 @@ main() {
   log_info "Curation complete"
 }
 
-main "$@"
+# Run only when executed directly, so tests can source the functions.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
