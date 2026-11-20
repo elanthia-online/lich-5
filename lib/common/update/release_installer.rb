@@ -189,7 +189,8 @@ module Lich
         #
         # On a computer that cannot open the beta's windows, the full install
         # is refused here, before the notice, and no confirmation window is
-        # opened (see #beta_windows_unavailable?).
+        # opened; a session without windows is warned instead (see
+        # #beta_windows_unavailable?).
         #
         # @param type [String, nil] file type ('script', 'library', 'data') or nil for full beta
         # @param requested_file [String, nil] file name if type is set
@@ -235,7 +236,7 @@ module Lich
             return
           end
 
-          return if beta_windows_unavailable?
+          return if beta_windows_unavailable?(warn_headless: false)
 
           respond 'Beta test installation accepted.  Thank you for considering!'
           # Held from setting the beta target until the install clears it. The
@@ -415,12 +416,30 @@ module Lich
         # the beta needs a native window helper or a Chromium-based browser
         # (see WebUIPreflight), and a full beta install is refused without one.
         #
+        # A session started with --no-gui is warned instead of refused, so a
+        # computer that only runs Lich without windows can still take the
+        # beta: the install replaces what windowed sessions here start from,
+        # and they would not open their windows.
+        #
+        # @param warn_headless [Boolean] show the warning to a session without
+        #   windows; false when it was already shown for this request
         # @return [Boolean] true when the beta must not be installed; the
         #   reason and the ways forward have been shown
         # @api private
-        def beta_windows_unavailable?
+        def beta_windows_unavailable?(warn_headless: true)
           reason = WebUIPreflight.refusal
           return false unless reason
+
+          if WebUIPreflight.headless_session?
+            if warn_headless
+              respond 'Lich sessions with windows would not be able to open the beta\'s windows on this computer:'
+              respond "  #{reason}."
+              respond 'This session runs without windows, so the beta can still be installed here, but it replaces'
+              respond 'the installation every session on this computer starts from.  Before starting one with windows,'
+              respond "set the #{WebUIPreflight::BROWSER_VARIABLE} environment variable to the full path of Chrome, Edge, Brave or Arc."
+            end
+            return false
+          end
 
           respond 'The Lich beta would not be able to open its windows on this computer:'
           respond "  #{reason}."

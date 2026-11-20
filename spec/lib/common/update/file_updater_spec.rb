@@ -290,8 +290,19 @@ RSpec.describe Lich::Util::Update::FileUpdater do
         expect(File.exist?(live_path)).to be(false)
         expect(printed).to eq(
           ['[lich5-update: GitHub check failed (rate limit reached). The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1, ' \
-           'and its older versions could not be checked, so foo.lic was not updated. Run the command again once the limit resets.]']
+           'and its older versions could not be checked, so foo.lic was not installed. Run the command again once the limit resets.]']
         )
+      end
+
+      it 'says an installed script was not updated when the history cannot be read' do
+        File.binwrite(live_path, "# mine\n")
+        allow(client).to receive(:fetch_github_json).with(commits_url).and_return(nil)
+        allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :rate_limited, status: 403))
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq("# mine\n")
+        expect(printed.last).to include('could not be checked, so foo.lic was not updated.')
       end
 
       it 'installs the newest version as before when the running Lich meets its floor' do

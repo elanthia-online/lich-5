@@ -11,10 +11,13 @@
   told before the install instead of after it. It only reads: nothing is
   built, launched or written.
 
+  The check is about the computer, not the session asking: a beta install
+  replaces the installation every session here starts from. A session
+  started with --no-gui (or --no-gtk) opens no windows itself, so the caller
+  may warn instead of refusing there (.headless_session?).
+
   The rules, in the order the beta applies them:
 
-    - A session started with --no-gui (or --no-gtk) opens no windows and
-      needs nothing.
     - LICH_WEBUI_BROWSER, when set, is the browser. It must name an
       executable file that is not snap-packaged Chromium; on macOS it may
       name an application bundle (.app) instead.
@@ -22,8 +25,9 @@
       needs the Swift compiler. When that fails it uses Google Chrome or
       Chromium.
     - Windows uses Google Chrome or Microsoft Edge. Linux uses Google Chrome
-      or Chromium that is not a snap package. On both, a browser saved in
-      the launcher's settings also opens the launcher.
+      or Chromium that is not a snap package. A browser saved in the
+      launcher's settings does not count: the beta opens only its launcher
+      with it, and script windows use LICH_WEBUI_BROWSER or discovery.
 
   Lich::WebUI::BrowserLauncher, which this Lich already ships, does the
   discovery and words most refusals. It is loaded on first use, so a session
@@ -65,24 +69,19 @@ module Lich
         # first as the Command Line Tools lay it out, then as Xcode does.
         SWIFTC_PATHS = ['usr/bin/swiftc', 'Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc'].freeze
 
-        # lich_settings row holding the browser chosen in the launcher's
-        # settings; the launcher itself reads and writes it under this name.
-        SAVED_BROWSER_SETTING = 'webui_launcher_browser_path'
-
         module_function
 
-        # Says why the beta could not open a window on this computer.
+        # Says why the beta could not open a window on this computer. A
+        # session started without windows gets the same answer: the
+        # installation it would replace is shared with windowed sessions.
         #
         # @param platform [String, nil] host OS string to check as; nil uses
         #   the running one
         # @param environment [#[]] environment holding LICH_WEBUI_BROWSER and
         #   the directories browsers are looked for in
-        # @param argv [Array<String>] the options Lich was started with
         # @return [String, nil] the reason, a clause without a final period;
-        #   nil when the beta can open a window, or needs none
-        def refusal(platform: nil, environment: ENV, argv: ARGV)
-          return nil if argv.any? { |argument| argument.to_s.match?(NO_GUI_OPTION) }
-
+        #   nil when the beta can open a window
+        def refusal(platform: nil, environment: ENV)
           platform ||= OS.host_os
           macos = platform.match?(/darwin/i)
           explicit, origin = launcher.browser_override(nil, environment)
@@ -91,12 +90,20 @@ module Lich
             return nil
           end
           return macos_refusal(environment) if macos
-          return nil if usable_browser?(saved_browser_path)
 
           launcher.command_for('', platform: platform, environment: environment)
           nil
         rescue Lich::WebUI::Error => error
           error.message
+        end
+
+        # Whether this session was started without windows (--no-gui or
+        # --no-gtk), so it needs none of its own.
+        #
+        # @param argv [Array<String>] the options Lich was started with
+        # @return [Boolean]
+        def headless_session?(argv: ARGV)
+          argv.any? { |argument| argument.to_s.match?(NO_GUI_OPTION) }
         end
 
         # Applies the beta's macOS startup rule when no browser is named: the
@@ -186,16 +193,6 @@ module Lich
         # @api private
         def usable_browser?(path)
           !path.nil? && launcher.executable_file?(path) && !launcher.snap_browser?(path)
-        end
-
-        # @return [String, nil] the browser saved in the launcher's settings,
-        #   or nil when none is saved or the settings cannot be read
-        # @api private
-        def saved_browser_path
-          value = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='#{SAVED_BROWSER_SETTING}';").to_s.strip
-          value.empty? ? nil : value
-        rescue StandardError
-          nil
         end
 
         # @return [Module] Lich::WebUI::BrowserLauncher, loaded on first use

@@ -300,7 +300,7 @@ module Lich
           end
 
           unless snapshot_problems(restore_snapshot).empty?
-            refuse_incomplete(candidates)
+            refuse_incomplete(candidates, prereleases: prereleases)
             return
           end
 
@@ -674,10 +674,13 @@ module Lich
         # are out of the way (older Lich versions left one per failed
         # snapshot attempt).
         #
-        # @param candidates [Array<String>] all snapshots, newest first; the
-        #   first is incomplete
+        # @param candidates [Array<String>] the snapshots that are not of a
+        #   prerelease, newest first; the first is incomplete
+        # @param prereleases [Array<String>] the snapshots of prerelease
+        #   versions; when any is newer than the last incomplete snapshot
+        #   listed, the incomplete ones are not the newest of all
         # @return [void]
-        def refuse_incomplete(candidates)
+        def refuse_incomplete(candidates, prereleases: [])
           incomplete = []
           fallback = nil
           candidates.each do |path|
@@ -689,11 +692,16 @@ module Lich
             incomplete << [path, problems]
           end
 
+          oldest_listed = File.basename(incomplete.last.first)
+          after_prereleases = prereleases.any? { |dir| File.basename(dir) > oldest_listed }
+
           respond
           if incomplete.size == 1
-            respond 'The newest snapshot is incomplete, so nothing was changed:'
+            which = after_prereleases ? 'newest snapshot that is not of a prerelease' : 'newest snapshot'
+            respond "The #{which} is incomplete, so nothing was changed:"
           else
-            respond "The #{incomplete.size} newest snapshots are incomplete, so nothing was changed:"
+            which = after_prereleases ? 'newest snapshots that are not of a prerelease' : 'newest snapshots'
+            respond "The #{incomplete.size} #{which} are incomplete, so nothing was changed:"
           end
           incomplete.each do |path, problems|
             respond "    #{path}"

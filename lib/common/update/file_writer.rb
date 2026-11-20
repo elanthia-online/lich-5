@@ -197,8 +197,7 @@ module Lich
         # @return [Hash<String, String>] filename => SHA1 hash
         def self.build_local_sha_map(dir, pattern = '*.lic')
           Dir[File.join(dir, pattern)].each_with_object({}) do |path, map|
-            body = File.binread(path)
-            map[File.basename(path)] = Digest::SHA1.hexdigest("blob #{body.size}\0#{body}")
+            map[File.basename(path)] = blob_sha(File.binread(path))
           end
         end
       end

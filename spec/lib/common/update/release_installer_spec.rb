@@ -37,6 +37,7 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
     # Whether this machine could open the beta's windows is not what these
     # examples are about; the ones that are set their own answer.
     allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(nil)
+    allow(Lich::Util::Update::WebUIPreflight).to receive(:headless_session?).and_return(false)
   end
 
   # The real installer is memoized for the whole Lich session, so one instance
@@ -625,6 +626,37 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         installer.prep_betatest('library', 'foo.rb')
 
         expect(Lich::Util::Update::WebUIPreflight).not_to have_received(:refusal)
+      end
+
+      context 'when this session runs without windows' do
+        before do
+          allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+          allow(Lich::Util::Update::WebUIPreflight).to receive(:headless_session?).and_return(true)
+          # The install itself is not what these examples are about.
+          allow(resolver).to receive(:resolve_channel_ref).and_return(nil)
+          allow(resolver).to receive(:last_error).and_return(nil)
+        end
+
+        it 'warns that windowed sessions here would not open the beta\'s windows, and still offers the beta' do
+          installer.prep_betatest
+
+          expect(messages).to include('Lich sessions with windows would not be able to open the beta\'s windows on this computer:')
+          expect(messages).to include("  #{reason}.")
+          expect(messages.grep(/was not installed/)).to be_empty
+          expect(messages).to include(a_string_matching(/To confirm your participation, run:/))
+        end
+
+        it 'installs on confirm without repeating the warning' do
+          installer.prep_betatest
+          shown = messages.count("  #{reason}.")
+
+          installer.confirm_betatest
+
+          expect(shown).to eq(1)
+          expect(messages.count("  #{reason}.")).to eq(1)
+          expect(messages).to include('Beta test installation accepted.  Thank you for considering!')
+          expect(resolver).to have_received(:resolve_channel_ref)
+        end
       end
     end
 

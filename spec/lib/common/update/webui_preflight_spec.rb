@@ -11,7 +11,6 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
   let(:installed) { [] }
   let(:snaps) { [] }
   let(:toolchain) { [false] }
-  let(:saved_browser) { [nil] }
   let(:chrome_linux) { '/usr/bin/google-chrome' }
   let(:chrome_macos) { '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }
   let(:windows_environment) { { 'PROGRAMFILES' => 'C:/Program Files', 'LOCALAPPDATA' => 'C:/Users/me/AppData/Local' } }
@@ -22,7 +21,6 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
     end
     allow(launcher).to receive(:snap_browser?) { |path, **| snaps.include?(path) }
     allow(described_class).to receive(:swift_toolchain?) { toolchain.first }
-    allow(described_class).to receive(:saved_browser_path) { saved_browser.first }
   end
 
   after { FileUtils.remove_entry(tmpdir, true) }
@@ -38,20 +36,25 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
     path
   end
 
-  def refusal(platform, environment = {}, argv = [])
-    described_class.refusal(platform: platform, environment: environment, argv: argv)
+  def refusal(platform, environment = {})
+    described_class.refusal(platform: platform, environment: environment)
   end
 
-  describe 'a session started without windows' do
-    it 'needs nothing, on any platform, under either spelling of the option' do
-      %w[linux darwin x64-mingw-ucrt].each do |platform|
-        expect(refusal(platform, {}, ['--login', 'Someone', '--no-gui'])).to be_nil
-        expect(refusal(platform, {}, ['--NO-GTK'])).to be_nil
-      end
+  describe '.headless_session?' do
+    it 'is true for a session started without windows, under either spelling of the option' do
+      expect(described_class.headless_session?(argv: ['--login', 'Someone', '--no-gui'])).to be(true)
+      expect(described_class.headless_session?(argv: ['--NO-GTK'])).to be(true)
     end
 
-    it 'is not mistaken for by an option that only starts the same way' do
-      expect(refusal('linux', {}, ['--no-guild', '--gui'])).to be_a(String)
+    it 'is not fooled by an option that only starts the same way' do
+      expect(described_class.headless_session?(argv: ['--no-guild', '--gui'])).to be(false)
+      expect(described_class.headless_session?(argv: [])).to be(false)
+    end
+
+    it 'does not change the answer about the computer, which windowed sessions share' do
+      stub_const('ARGV', ['--no-gui'])
+
+      expect(refusal('linux')).to match(/Google Chrome or Chromium is required/)
     end
   end
 
@@ -93,20 +96,13 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
       expect(refusal('linux', { 'PATH' => '/usr/bin:/opt/tools' })).to match(/Google Chrome or Chromium is required/)
     end
 
-    it 'accepts a usable browser saved in the launcher settings' do
-      saved_browser[0] = '/opt/brave/brave'
+    it 'does not count a browser saved in the launcher settings, which script windows do not use' do
+      db = double('db', get_first_value: '/opt/brave/brave')
+      allow(Lich).to receive(:db).and_return(db)
       installed << '/opt/brave/brave'
 
-      expect(refusal('linux')).to be_nil
-    end
-
-    it 'does not accept a saved browser that is gone or is snap-packaged' do
-      saved_browser[0] = '/opt/brave/brave'
-      expect(refusal('linux')).to be_a(String)
-
-      installed << '/opt/brave/brave'
-      snaps << '/opt/brave/brave'
-      expect(refusal('linux')).to be_a(String)
+      expect(refusal('linux')).to match(/Google Chrome or Chromium is required/)
+      expect(db).not_to have_received(:get_first_value)
     end
   end
 
@@ -157,8 +153,9 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
     end
 
     it 'does not count the browser saved in the launcher settings, which startup never reaches' do
-      saved_browser[0] = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
-      installed << saved_browser.first
+      brave = '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+      allow(Lich).to receive(:db).and_return(double('db', get_first_value: brave))
+      installed << brave
 
       expect(refusal('darwin')).to be_a(String)
     end
@@ -286,7 +283,7 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
   end
 
   it 'checks the running platform when none is given' do
-    expect(described_class.refusal(environment: {}, argv: [])).to be_a(String)
+    expect(described_class.refusal(environment: {})).to be_a(String)
   end
 
   describe '.swift_toolchain?' do
@@ -324,28 +321,6 @@ RSpec.describe Lich::Util::Update::WebUIPreflight do
       allow(Open3).to receive(:capture2e).and_raise(Errno::ENOENT)
 
       expect(described_class.swift_toolchain?).to be(false)
-    end
-  end
-
-  describe '.saved_browser_path' do
-    before { allow(described_class).to receive(:saved_browser_path).and_call_original }
-
-    it 'reads the row the launcher keeps its browser choice in' do
-      db = double('db')
-      allow(Lich).to receive(:db).and_return(db)
-      allow(db).to receive(:get_first_value)
-        .with("SELECT value FROM lich_settings WHERE name='webui_launcher_browser_path';").and_return(" /opt/brave/brave\n")
-
-      expect(described_class.saved_browser_path).to eq('/opt/brave/brave')
-    end
-
-    it 'is nil when nothing is saved or the settings cannot be read' do
-      db = double('db', get_first_value: nil)
-      allow(Lich).to receive(:db).and_return(db)
-      expect(described_class.saved_browser_path).to be_nil
-
-      allow(db).to receive(:get_first_value).and_raise(StandardError, 'database is locked')
-      expect(described_class.saved_browser_path).to be_nil
     end
   end
 end

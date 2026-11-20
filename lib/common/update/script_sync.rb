@@ -136,7 +136,13 @@ module Lich
             if config[:check_lich_requirement]
               required = ScriptFloor.unmet(content)
               if required
-                row, result = resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required)
+                # The file list names the newest version by blob SHA, but its
+                # bytes come from raw.githubusercontent.com, which can serve a
+                # branch path from its cache for up to five minutes after a
+                # push. Bytes that are not the listed version are judged for
+                # this sync only, not remembered.
+                listed = FileWriter.blob_sha(content) == entry['sha']
+                row, result = resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required, remember: listed)
                 unless result&.status == :found
                   history_error ||= result if result&.status == :failed
                   held_scripts << row
@@ -279,7 +285,8 @@ module Lich
         # script is not installed, or the installed copy has an unmet floor
         # of its own), the file's history is searched for the newest version
         # this Lich can run. Decisions that leave the files as they are get
-        # remembered here; the caller remembers an install once it is written.
+        # remembered here when +remember+ allows it; the caller remembers an
+        # install once it is written.
         #
         # @param entry [Hash] the script's GitHub tree entry
         # @param config [Hash] repository config
@@ -287,17 +294,20 @@ module Lich
         # @param dest [String] directory the repository installs into
         # @param local_sha [String, nil] blob SHA of the local copy, nil if absent
         # @param required [String] the floor of the repository's newest version
+        # @param remember [Boolean] whether the floor was read from the version
+        #   the file list names; false for a stale raw download, so a kept copy
+        #   or a fruitless search is decided again at the next sync
         # @return [Array(Array, ScriptFloor::Result)] the summary row for the
         #   script, and the history search's result (nil when a local copy
         #   was kept without searching). A :found result is the version to
-        #   install; the row then reports it as installed.
+        #   install; the row then reports it as installed, with its commit.
         # @api private
-        def resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required)
+        def resolve_unmet_floor(entry, config, repo_key, dest, local_sha, required, remember: true)
           filename = File.basename(entry['path'])
           if local_sha && local_sha != entry['sha']
             local = read_local(dest, filename)
             if local && ScriptFloor.unmet(local).nil?
-              @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'held')
+              @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'held') if remember
               return [[filename, required], nil]
             end
           end
@@ -305,9 +315,9 @@ module Lich
           result = @floor.newest_compatible(ScriptFloor.source_for(config), entry['path'])
           case result.status
           when :found
-            [[filename, required, :installed_compatible], result]
+            [[filename, required, :installed_compatible, result.commit], result]
           when :none
-            @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'none')
+            @held.remember(repo_key, filename, remote_sha: entry['sha'], local_sha: local_sha, required: required, outcome: 'none') if remember
             [[filename, required, :none_compatible], result]
           else
             [[filename, required, :history_unavailable], result]

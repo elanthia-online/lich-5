@@ -76,9 +76,13 @@ module Lich
         # @param required [String] the Lich version the newest version needs
         # @param outcome [Symbol, nil] a HELD_OUTCOMES key, or nil when the
         #   local copy was kept as it was
+        # @param commit [String, nil] for :installed_compatible, the commit
+        #   installed, shown short so the user can tell which version it is
         # @return [String] the Status cell for a held script
-        def self.held_status(required, outcome = nil)
-          "needs Lich #{required}+ (#{HELD_OUTCOMES.fetch(outcome, 'not updated')})"
+        def self.held_status(required, outcome = nil, commit = nil)
+          done = HELD_OUTCOMES.fetch(outcome, 'not updated')
+          done = "#{done}, commit #{commit[0, 7]}" if commit && outcome == :installed_compatible
+          "needs Lich #{required}+ (#{done})"
         end
 
         # Renders sync results as Terminal::Table.
@@ -92,8 +96,9 @@ module Lich
         # @param failed_other [Hash<String, Array<String>>] subdir => failed files (default: {})
         # @param held_scripts [Array<Array>] [file, required Lich version] pairs whose
         #   newest version was not installed because the running Lich is too old, each with
-        #   an optional third element saying what happened instead (a HELD_OUTCOMES key);
-        #   without one the script was simply not updated (default: [])
+        #   an optional third element saying what happened instead (a HELD_OUTCOMES key)
+        #   and, for :installed_compatible, a fourth naming the commit installed;
+        #   without a third element the script was simply not updated (default: [])
         # @param missing_tracked [Array<Array(String, String)>] [file, status] pairs for
         #   tracked names the repo does not contain, so the sync does not update them (default: [])
         # @return [void]
@@ -121,7 +126,7 @@ module Lich
 
           downloaded_scripts.each { |f| table_rows << ['script', f, 'downloaded'] }
           failed_scripts.each { |f| table_rows << ['script', f, 'FAILED (will retry next login)'] }
-          held_scripts.each { |f, required, outcome| table_rows << ['script', f, held_status(required, outcome)] }
+          held_scripts.each { |f, required, outcome, commit| table_rows << ['script', f, held_status(required, outcome, commit)] }
           missing_tracked.each { |f, status| table_rows << ['script', f, status] }
 
           downloaded_other.each do |subdir, files|

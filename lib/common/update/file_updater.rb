@@ -94,12 +94,12 @@ module Lich
           if remote_entry
             local_path = File.join(location, filename)
             if File.exist?(local_path)
-              local_sha = Digest::SHA1.hexdigest("blob #{File.binread(local_path).bytesize}\0#{File.binread(local_path)}")
-              if local_sha == remote_entry['sha']
+              local_bytes = File.binread(local_path)
+              if FileWriter.blob_sha(local_bytes) == remote_entry['sha']
                 # The newest version is installed. For a script this Lich
                 # cannot run, that is not up to date: the floor check below
                 # replaces it, working from the bytes already on disk.
-                content = File.binread(local_path) if type == "script"
+                content = local_bytes if type == "script"
                 if content.nil? || ScriptFloor.unmet(content).nil?
                   StatusReporter.respond_mono("[lich5-update: #{filename} is already up to date.]")
                   return
@@ -331,7 +331,7 @@ module Lich
           else
             error = found.error
             StatusReporter.respond_github_failure(error&.global? ? error : nil,
-                                                  "#{needs}, and its older versions could not be checked, so #{filename} was not updated.",
+                                                  "#{needs}, and its older versions could not be checked, so #{filename} was not #{action}.",
                                                   retried_by: retried_by)
             nil
           end

@@ -13,11 +13,14 @@
   script uses to check itself when it starts.
 
   The history is every commit reachable from the branch that changed the
-  file. On a branch that only takes squash merges, as the elanthia-online
-  script repositories do, each of those is a version the branch itself held.
-  A branch that takes merge commits also lists the intermediate commits of
-  merged work, which were never published as a version, so callers search
-  only the built-in repositories.
+  file. On a branch that only takes squash merges, each of those is a
+  version the branch itself held. A branch that takes merge commits also
+  lists the intermediate commits of merged work, which were never published
+  as a version, so callers search only the built-in repositories. The
+  elanthia-online script repositories have taken only squash merges since
+  early 2025 (their last merge commits are from February 2025); older history
+  still holds such intermediate commits, which the walk reaches only for a
+  script with no version this Lich can run among its newer commits.
 =end
 
 module Lich

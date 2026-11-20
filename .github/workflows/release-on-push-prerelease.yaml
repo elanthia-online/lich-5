@@ -9,7 +9,8 @@
 # - No reliance on a local git checkout for GH release edits/uploads.
 # - PR labels 'skip-installer' or 'no-installer' gate installer attachment (case-insensitive).
 # - The same labels skip the pre-tag R4L5 contract check: an installer-less
-#   prerelease ships nothing Ruby4Lich5 serves.
+#   prerelease is reached only from a logged-in session whose Ruby and gems
+#   were already checked at login, so Ruby4Lich5 recovery does not apply.
 #
 # INPUTS (selected)
 # - Branch trigger: pre/beta or pre/beta/*

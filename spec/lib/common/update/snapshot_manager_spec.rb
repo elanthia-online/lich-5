@@ -775,8 +775,35 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         manager.revert
 
         expect(live_state).to eq(before)
-        expect(messages).to include('The newest snapshot is incomplete, so nothing was changed:', "    #{bad}")
+        expect(messages).to include('Passing over a newer snapshot of prerelease versions (5.22.0-beta.0).')
+        expect(messages).to include('The newest snapshot that is not of a prerelease is incomplete, so nothing was changed:', "    #{bad}")
         expect(messages).to include('The next complete snapshot is Lich5 version 5.21.0:', "    #{stable}")
+      end
+
+      it 'says the incomplete snapshots are the newest after the prerelease ones it passed over' do
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', '5.21.1', omit: %i[version])
+        make_snapshot('2026-10-03-00-00-00', '5.21.2', omit: %i[lich])
+        make_snapshot('2026-10-04-00-00-00', '5.22.0-beta.0', staged: true)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('The 2 newest snapshots that are not of a prerelease are incomplete, so nothing was changed:')
+        expect(messages.grep(/\AThe (?:\d+ )?newest snapshots? (?:is|are) incomplete/)).to be_empty
+      end
+
+      it 'says so when a prerelease snapshot sits between two incomplete ones' do
+        make_snapshot('2026-10-01-00-00-00', '5.21.0', staged: true)
+        make_snapshot('2026-10-02-00-00-00', '5.21.1', omit: %i[version])
+        make_snapshot('2026-10-03-00-00-00', '5.22.0-beta.0', staged: true)
+        make_snapshot('2026-10-04-00-00-00', '5.21.2', omit: %i[lich])
+        messages = capture_responses
+
+        manager.revert
+
+        expect(messages).to include('The 2 newest snapshots that are not of a prerelease are incomplete, so nothing was changed:')
+        expect(messages.grep(/\AThe (?:\d+ )?newest snapshots? (?:is|are) incomplete/)).to be_empty
       end
 
       it 'never offers a prerelease snapshot as the next complete one' do

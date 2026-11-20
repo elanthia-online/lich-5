@@ -380,7 +380,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
         sync.sync_repo('core')
 
         expect(File.binread(live_path)).to eq(compatible)
-        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]]])
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible, shas[2]]]])
       end
 
       it 'stops at that version without reading anything older' do
@@ -434,7 +434,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
         sync.sync_repo('core')
 
         expect(File.binread(live_path)).to eq(compatible)
-        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]]])
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible, shas[2]]]])
       end
 
       it 'works from the installed bytes instead of downloading the same version again' do
@@ -518,7 +518,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
         sync.sync_repo('core')
         sync.sync_repo('core')
 
-        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible]], [['needy.lic', '5.26.0']]])
+        expect(summaries).to eq([[['needy.lic', '5.26.0', :installed_compatible, shas[2]]], [['needy.lic', '5.26.0']]])
       end
 
       it 'is read back by a later session, which has a new sync object' do
@@ -611,6 +611,40 @@ RSpec.describe Lich::Util::Update::ScriptSync do
         expect(Lich::Util::Update::FileWriter).to have_received(:safe_write).with(live_path, compatible)
         expect(remembered).to be_nil
       end
+
+      # raw.githubusercontent.com serves a branch path from its cache for up
+      # to five minutes after a push, while the file list is already current.
+      context 'when the branch download is older than the version the file list names' do
+        let(:kept) { script_requiring('5.24.0', 'v1') }
+        let(:released) { "# v5 needs no particular Lich\necho 'v5'\n" }
+
+        before do
+          File.binwrite(live_path, kept)
+          tree['tree'].first['sha'] = git_blob_sha(released)
+        end
+
+        it 'keeps a runnable local copy for this sync only, and installs the listed version once the download catches up' do
+          sync.sync_repo('core')
+
+          expect(File.binread(live_path)).to eq(kept)
+          expect(remembered).to be_nil
+
+          allow(client).to receive(:http_get).with("#{raw}/master/scripts/needy.lic", auth: false).and_return(released)
+          sync.sync_repo('core')
+
+          expect(File.binread(live_path)).to eq(released)
+        end
+
+        it 'does not remember that no version can run here' do
+          File.delete(live_path)
+          history.replace([newest])
+
+          sync.sync_repo('core')
+
+          expect(summaries).to eq([[['needy.lic', '5.26.0', :none_compatible]]])
+          expect(remembered).to be_nil
+        end
+      end
     end
   end
 
@@ -691,14 +725,14 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       output = nil
       allow(described_class).to receive(:respond_mono) { |text| output = text }
       held = [
-        ['kept.lic', '5.26.0'], ['fell-back.lic', '5.26.0', :installed_compatible],
+        ['kept.lic', '5.26.0'], ['fell-back.lic', '5.26.0', :installed_compatible, '46da55d0' + ('0' * 32)],
         ['nothing.lic', '5.27.0', :none_compatible], ['unknown.lic', '5.26.0', :history_unavailable]
       ]
 
       described_class.render_sync_summary('Core', 4, [], {}, [], [], {}, held)
 
       expect(output).to include(
-        'needs Lich 5.26.0+ (not updated)', 'needs Lich 5.26.0+ (installed newest compatible version)',
+        'needs Lich 5.26.0+ (not updated)', 'needs Lich 5.26.0+ (installed newest compatible version, commit 46da55d)',
         'needs Lich 5.27.0+ (no compatible version found)', 'needs Lich 5.26.0+ (older versions not checked; will retry next login)',
         'Total: 1 updated, 4 need newer Lich'
       )
