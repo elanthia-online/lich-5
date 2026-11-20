@@ -313,6 +313,21 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         end
       end
 
+      it 'stops a script with exit handlers at body end and runs its handlers' do
+        Dir.mktmpdir('script-linger-exit-handler') do |root|
+          _host, child = start_lingering(root, 'linger-exit-handler', "Script.at_exit { LINGER_EVENTS << :handler }\n#{queued_window}")
+          expect(child.join(3)).to equal(child)
+          events = []
+          while (event = LINGER_EVENTS.pop(timeout: 0.5))
+            events << event
+          end
+          expect(events).to include(:handler)
+        ensure
+          child&.kill(context: :shutdown) if child&.running?
+          Lich::WebUI.reset!
+        end
+      end
+
       it 'waits for a worker thread that queues the window just after the body ends' do
         Dir.mktmpdir('script-linger-thread') do |root|
           _host, child = start_lingering(root, 'linger-thread', "Thread.new { sleep 0.2\n#{queued_window} }\n")

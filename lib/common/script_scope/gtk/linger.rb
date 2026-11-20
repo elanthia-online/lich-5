@@ -22,14 +22,17 @@ module Lich
         # compatibility UI work not yet started, keep the owner running until
         # that work has run and the windows it shows are closed; ;kill still
         # ends it at once. A body that ends with nothing pending stops as
-        # before, so scripts that close their own windows in exit handlers are
-        # unaffected. A body that failed never waits: its name and callbacks
-        # are released at once.
+        # before. A script that registered exit handlers also stops at body
+        # end as before. A body that failed never waits: its name and
+        # callbacks are released at once.
         # @param owner [Script] owner whose body has just finished
         # @return [void]
         # @api private
         def self.await_ui_linger(owner)
           return unless owner.running? && !owner.stopping? && owner.exit_error.nil?
+          # A script with exit handlers owns its teardown, so it stops at body
+          # end as before; owner-death cleanup closes any UI it left.
+          return if owner.at_exit_procs&.any?
           return unless ui_left_behind?(owner)
 
           waiting_since = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -55,7 +58,8 @@ module Lich
 
         # Decides whether a finished body left UI work behind. A worker thread
         # started just before the body ended may not have queued its UI yet
-        # (Thread.new { Gtk.queue { ... } }; exit). Only scripts that use this
+        # (Thread.new { Gtk.queue { ... } }; exit).
+        # Only scripts that use this
         # compatibility layer and queued no UI of their own before the body
         # ended wait for it. Work admitted after the body ended counts even if
         # it has already run by the time this check looks.

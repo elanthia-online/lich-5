@@ -252,8 +252,11 @@ module Lich
                 script_obj.__send__(:__record_exit_error, error)
                 Script.__send__(:__report_script_error, script_obj, error, :untrusted => !trusted)
               ensure
-                ScriptBodyCompletion.run(script_obj)
-                script_obj.kill if script_obj.running? && !script_obj.stopping?
+                begin
+                  ScriptBodyCompletion.run(script_obj)
+                ensure
+                  script_obj.kill if script_obj.running? && !script_obj.stopping?
+                end
               end
             }
             script_obj.__send__(:__attach_startup_worker, new_thread)

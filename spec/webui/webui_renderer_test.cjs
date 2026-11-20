@@ -1187,6 +1187,37 @@ test('an out-of-range number clamps to its bound on blur and at submit', t => {
   assert.deepEqual(sent.at(-1).submission, [100, 0], 'a submit without blur still sends in-range values');
 });
 
+test('the blur from replacing a number field during a render does not clamp a value being typed', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.amount = ['change'];
+  const wrapper = dom.window.LichWebUI.render(page, {
+    type: 'number_input', cid: 'amount', props: { value: 25, min: 10, max: 500, step: 1 }, children: []
+  });
+  const control = wrapper.querySelector('input');
+  control.value = '2';
+  const before = sent.length;
+  page.restoringFocus = true;
+  control.dispatchEvent(new dom.window.Event('blur'));
+  page.restoringFocus = false;
+  assert.equal(control.value, '2', 'the partly typed value is left alone');
+  assert.equal(sent.length, before, 'nothing is sent for the replacement blur');
+});
+
+test('an unrelated render keeps a number the user is still typing, unclamped', t => {
+  const { dom, receive } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'typing' }] });
+  const frame = generation => ({ type: 'render', page: 'typing', generation, bindings: {}, submissions: {},
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'amount', props: { value: 25, min: 10, max: 500, step: 1 }, children: [] },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
+    ] } });
+  receive(frame(1));
+  dom.window.document.querySelector('input[type=number]').value = '2';
+  receive(frame(2));
+  assert.equal(dom.window.document.querySelector('input[type=number]').value, '2', 'the partly typed value survives the render');
+});
+
 test('a number clamps to the highest legal step when max is off-step', t => {
   const { dom, receive, sent } = fixture();
   t.after(() => dom.window.close());
