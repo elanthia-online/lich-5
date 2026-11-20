@@ -229,14 +229,14 @@ module Lich
           respond "Your previous installation is saved in: #{saved}"
           respond "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until"
           respond "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but"
-          respond "may not put back Gemfile, Gemfile.lock and LICENSE. For those, do steps 3 and 4."
+          respond "may not put back Gemfile and LICENSE. For those, do steps 3 and 4."
           respond "If Lich will not start, or to come back to this snapshot later, do all four:"
           respond "  1. Move everything in #{lib_dir} to a new folder outside it and keep that"
           respond "     folder (a failed --revert may have left the only copy of files there), then"
           respond "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}."
           respond "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}."
-          respond "  3. Copy #{launcher} and any Gemfile, Gemfile.lock and LICENSE in #{saved} into #{lich_dir}."
-          respond "  4. If #{saved} has no Gemfile.lock, delete the one in #{lich_dir}."
+          respond "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}."
+          respond "  4. Delete Gemfile.lock in #{lich_dir} if there is one; Bundler regenerates it from the Gemfile."
         end
 
         # Names the lich-5 repository of +owner+.

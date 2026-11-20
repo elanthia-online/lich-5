@@ -309,8 +309,13 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(Dir.children(dir).sort).to eq([lich_name, 'lib', 'scripts', described_class::STAGED_MARKER_NAME].sort)
     end
 
-    it 'copies the top-level files an update overwrites, skipping any not installed' do
+    it 'keeps every top-level file an update overwrites except Gemfile.lock' do
+      expect(described_class::SNAPSHOT_TOP_LEVEL_FILES).to eq(Lich::Util::Update::ReleaseInstaller::TOP_LEVEL_FILES - %w[Gemfile.lock])
+    end
+
+    it 'copies Gemfile and LICENSE but never Gemfile.lock, which Bundler regenerates' do
       write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      write(File.join(LICH_DIR, 'Gemfile.lock'), "# lock 5.22.0\n")
       write(File.join(LICH_DIR, 'LICENSE'), "# LICENSE\n")
 
       dir = manager.snapshot

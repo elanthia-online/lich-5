@@ -4,7 +4,7 @@
   Snapshot and rollback functionality for Lich core files.
 
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
-  updates, with copies of Gemfile, Gemfile.lock and LICENSE. Supports
+  updates, with copies of Gemfile and LICENSE. Supports
   rollback to most recent snapshot; #revert restores lib/, lich.rbw and
   the core scripts, not the top-level files (see #copy_top_level_files).
   #snapshot, #revert and #restore_from describe how each leaves the
@@ -15,8 +15,9 @@
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
   Lich will not start and cannot run the revert again. The snapshot itself
   is untouched: copying its lib/, the core scripts in its scripts/, its
-  lich.rbw and any Gemfile, Gemfile.lock and LICENSE it has back by hand,
-  or running the revert from another session of this installation that is
+  lich.rbw and any Gemfile and LICENSE it has back by hand (and deleting
+  Gemfile.lock, which Bundler regenerates from the Gemfile), or running
+  the revert from another session of this installation that is
   still running, restores it. On Windows each rename
   of the swap that Windows refuses keeps this window open for up to about 3
   seconds while it is retried; Lich says so while it waits.
@@ -399,9 +400,15 @@ module Lich
           end
         end
 
-        # Copies the top-level files an update overwrites
-        # (ReleaseInstaller::TOP_LEVEL_FILES: Gemfile, Gemfile.lock, LICENSE)
-        # into +dest+, so the ones from before an update survive it. Lich
+        # Top-level files a snapshot keeps: those an update overwrites
+        # (ReleaseInstaller::TOP_LEVEL_FILES) except Gemfile.lock. A lock
+        # file is generated from the live Gemfile, and Bundler regenerates a
+        # missing one, so it is neither kept nor put back.
+        # (A literal, as this file loads before ReleaseInstaller.)
+        SNAPSHOT_TOP_LEVEL_FILES = %w[Gemfile LICENSE].freeze
+
+        # Copies SNAPSHOT_TOP_LEVEL_FILES (Gemfile, LICENSE) into +dest+, so
+        # the ones from before an update survive it. Lich
         # checks its gems against the Gemfile at startup. #revert does not
         # restore them: after a restart, --revert runs the code of whatever
         # was installed, which may not know about them, so they are kept for
@@ -416,7 +423,7 @@ module Lich
         # @return [void]
         # @api private
         def copy_top_level_files(dest)
-          ReleaseInstaller::TOP_LEVEL_FILES.each do |file|
+          SNAPSHOT_TOP_LEVEL_FILES.each do |file|
             source = File.join(LICH_DIR, file)
             next unless File.file?(source) && File.readable?(source)
 

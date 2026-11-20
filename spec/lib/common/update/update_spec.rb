@@ -347,14 +347,14 @@ def expected_branch_recovery_steps(snapshot_dir, lib_dir: LIB_DIR, script_dir: S
   ["Your previous installation is saved in: #{saved}",
    "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until",
    "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but",
-   'may not put back Gemfile, Gemfile.lock and LICENSE. For those, do steps 3 and 4.',
+   'may not put back Gemfile and LICENSE. For those, do steps 3 and 4.',
    'If Lich will not start, or to come back to this snapshot later, do all four:',
    "  1. Move everything in #{lib_dir} to a new folder outside it and keep that",
    '     folder (a failed --revert may have left the only copy of files there), then',
    "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}.",
    "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}.",
-   "  3. Copy #{launcher} and any Gemfile, Gemfile.lock and LICENSE in #{saved} into #{lich_dir}.",
-   "  4. If #{saved} has no Gemfile.lock, delete the one in #{lich_dir}."]
+   "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}.",
+   "  4. Delete Gemfile.lock in #{lich_dir} if there is one; Bundler regenerates it from the Gemfile."]
 end
 
 # --branch names a lich-5 branch, a fork's lich-5 branch (owner:branch), or a
