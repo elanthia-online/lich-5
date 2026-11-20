@@ -258,24 +258,14 @@ jobs:
           set -euo pipefail
           git fetch --tags origin main
 
-          # Get latest stable
-          stable="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --merged origin/main --sort=-version:refname | head -n1 || true)"
-          if [[ ! "$stable" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          # Next minor when a feat commit exists since the latest stable tag,
+          # else next patch; the beta number follows the highest existing beta
+          # tag for that version (beta.0 when there is none). Empty when no
+          # stable tag exists.
+          NEXT="$(bash .github/scripts/next-beta-version.sh origin/main HEAD)"
+          if [[ -z "$NEXT" ]]; then
             echo "No stable tag detected; skipping pin."
             exit 0
-          fi
-
-          MAJ="${BASH_REMATCH[1]}"
-          MIN="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
-    
-          # Check if there are any feat: commits since last stable
-          if git log "${stable}..HEAD" --oneline | grep -q '^[a-f0-9]* feat[(:!]'; then
-            # Feature commits present - bump minor
-            NEXT="v${MAJ}.$((MIN+1)).0-beta.0"
-          else
-            # Only fixes/chores - bump patch
-            NEXT="v${MAJ}.${MIN}.$((PATCH+1))-beta.0"
           fi
 
           echo "Setting Release-As: ${NEXT}"
