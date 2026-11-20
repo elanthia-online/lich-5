@@ -382,6 +382,28 @@ else
   pass "union update: a curated PR's change to a curate script does not run"
 fi
 
+# The YAML check passes a curated file's name to Ruby as an argument. A name
+# that closes the quote and calls Ruby must not run it, and a malformed file
+# must still be flagged.
+# shellcheck source=.github/scripts/strategies/syntax/yaml.sh
+source "${TEST_DIR}/../scripts/strategies/syntax/yaml.sh"
+YAML_DIR="${WORK_DIR}/yaml-names"
+mkdir -p "$YAML_DIR"
+: > "$YAML_DIR/x'+File.write(\"yaml_name_ran\",\"x\").to_s+'.yml"
+printf 'a: [unclosed\n' > "$YAML_DIR/bad.yml"
+printf 'a: 1\n' > "$YAML_DIR/good.yml"
+(cd "$YAML_DIR" && validate_yaml_syntax) > "$LOG_FILE" 2>&1 || true
+if [[ -e "$YAML_DIR/yaml_name_ran" ]]; then
+  fail "the YAML check does not run Ruby written into a curated file name"
+else
+  pass "the YAML check does not run Ruby written into a curated file name"
+fi
+if grep -q 'Potential YAML syntax issue in ./bad.yml' "$LOG_FILE"; then
+  pass "the YAML check still flags a malformed file"
+else
+  fail "the YAML check still flags a malformed file"
+fi
+
 echo
 echo "Tests passed: $TESTS_PASSED/$TESTS_RUN"
 echo "Tests failed: $TESTS_FAILED/$TESTS_RUN"
