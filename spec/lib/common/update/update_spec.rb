@@ -333,3 +333,329 @@ RSpec.describe 'Lich::Util::Update.request gem package routing' do
     expect(help).to include('Releases install automatically only from trusted owners (elanthia-online)')
   end
 end
+
+# The way back by hand that a --branch install prints, both after success and
+# after a failure once files were replaced. Each live directory is named on
+# its own (--lib-dir and --script-dir move them) and the launcher is the one
+# running, so neither may be hard-coded.
+def expected_branch_recovery_steps(snapshot_dir, lib_dir: LIB_DIR, script_dir: SCRIPT_DIR)
+  launcher = File.basename($PROGRAM_NAME)
+  lich_dir = File.expand_path(LICH_DIR)
+  lib_dir = File.expand_path(lib_dir, lich_dir)
+  script_dir = File.expand_path(script_dir, lich_dir)
+  saved = File.expand_path(snapshot_dir, lich_dir)
+  ["Your previous installation is saved in: #{saved}",
+   "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until",
+   "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but",
+   'may not put back Gemfile and LICENSE. For those, do step 3.',
+   "If Lich will not start, or to put back this snapshot's program files later, do all three:",
+   "  1. Move everything in #{lib_dir} to a new folder outside it and keep that",
+   '     folder (a failed --revert may have left the only copy of files there), then',
+   "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}.",
+   "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}.",
+   "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}."]
+end
+
+# --branch names a lich-5 branch, a fork's lich-5 branch (owner:branch), or a
+# branch of any repository under an allowlisted owner (owner/repo:branch), so
+# a successor project can be installed by opt-in.
+RSpec.describe 'Lich::Util::Update::BranchInstaller branch specs' do
+  let(:snapshot_manager) { instance_double(Lich::Util::Update::SnapshotManager) }
+  let(:installer) { Lich::Util::Update::BranchInstaller.new(snapshot_manager, nil) }
+  let(:messages) { [] }
+  let(:downloads) { [] }
+
+  before do
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+    allow(snapshot_manager).to receive(:snapshot).and_yield(nil)
+    # Stop at the download: only the URL it would fetch matters here.
+    allow(Lich::Util::Update::Tarball).to receive(:with_extracted) do |url, _filename|
+      downloads << url
+      raise SocketError, 'offline'
+    end
+  end
+
+  def archive(repo, branch)
+    "https://github.com/#{repo}/archive/refs/heads/#{branch}.tar.gz"
+  end
+
+  {
+    'main'                            => ['elanthia-online/lich-5', 'main'],
+    'pre/beta'                        => ['elanthia-online/lich-5', 'pre%2Fbeta'],
+    'someone:feature'                 => ['someone/lich-5', 'feature'],
+    'someone:feat/x'                  => ['someone/lich-5', 'feat%2Fx'],
+    'someone/lich-5:feature'          => ['someone/lich-5', 'feature'],
+    'someone/Lich-5:feat/x'           => ['someone/lich-5', 'feat%2Fx'],
+    'Elanthia-Online:main'            => ['elanthia-online/lich-5', 'main'],
+    'Elanthia-Online/LICH-5:main'     => ['elanthia-online/lich-5', 'main'],
+    'someone/lich-5.git:main'         => ['someone/lich-5', 'main'],
+    'elanthia-online/lich-6.git:main' => ['elanthia-online/lich-6', 'main'],
+    'elanthia-online/lich-6:main'     => ['elanthia-online/lich-6', 'main'],
+    'Elanthia-Online/lich-6:main'     => ['Elanthia-Online/lich-6', 'main'],
+    'elanthia-online/lich-6:feat/web' => ['elanthia-online/lich-6', 'feat%2Fweb'],
+    ' elanthia-online/lich-6:main '   => ['elanthia-online/lich-6', 'main']
+  }.each do |spec, (repo, branch)|
+    it "downloads #{repo} #{branch} for #{spec.inspect}" do
+      installer.download_branch_update(spec)
+
+      expect(downloads).to eq([archive(repo, branch)])
+    end
+  end
+
+  it 'names the repository when it is not lich-5' do
+    installer.download_branch_update('elanthia-online/lich-6:main')
+
+    expect(messages).to include('Repository: elanthia-online/lich-6')
+  end
+
+  ['main', 'elanthia-online:main', 'Elanthia-Online:main'].each do |spec|
+    it "does not name the repository for #{spec.inspect}, a lich-5 branch" do
+      installer.download_branch_update(spec)
+
+      expect(messages.grep(/^Repository:/)).to be_empty
+    end
+  end
+
+  {
+    ''                                    => /incomplete/,
+    'someone:'                            => /incomplete/,
+    ':main'                               => /incomplete/,
+    'elanthia-online/lich-6:'             => /incomplete/,
+    'someone/lich-6:main'                 => /only be installed from: elanthia-online/,
+    'elanthia-online-evil/lich-6:main'    => /only be installed from: elanthia-online/,
+    'elanthia-online/../x:main'           => /not a valid owner\/repo/,
+    'elanthia-online/..:main'             => /not a valid owner\/repo/,
+    'elanthia-online/:main'               => /not a valid owner\/repo/,
+    '/lich-6:main'                        => /not a valid owner\/repo/,
+    'elanthia-online/lich 6:main'         => /not a valid owner\/repo/,
+    'elanthia-online/.git:main'           => /not a valid owner\/repo/,
+    'someone/elanthia-online/lich-6:main' => /not a valid owner\/repo/,
+    'x/y/elanthia-online/lich-6:main'     => /not a valid owner\/repo/,
+    '..:main'                             => /not a valid GitHub owner/,
+    'a b:main'                            => /not a valid GitHub owner/,
+    'a?x=:main'                           => /not a valid GitHub owner/
+  }.each do |spec, error|
+    it "refuses #{spec.inspect} without taking a snapshot or downloading" do
+      installer.download_branch_update(spec)
+
+      expect(messages).to include(a_string_matching(error))
+      expect(messages).to include(a_string_including('<owner>/<repo>:<branch_name>'))
+      expect(snapshot_manager).not_to have_received(:snapshot)
+      expect(downloads).to be_empty
+    end
+  end
+
+  it 'records the other repository in branch tracking after installing' do
+    release_installer = instance_double(Lich::Util::Update::ReleaseInstaller,
+                                        validate_lich_structure: true,
+                                        extract_version_from_file: '6.0.0',
+                                        perform_update: true)
+    installer = Lich::Util::Update::BranchInstaller.new(snapshot_manager, release_installer)
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+    allow(snapshot_manager).to receive(:snapshot).and_yield('/backup/L5-snapshot-2026-11-19-00-00-00')
+    allow(Lich::Util::Update).to receive(:store_branch_tracking)
+
+    Dir.mktmpdir do |tree|
+      FileUtils.mkdir_p(File.join(tree, 'lib'))
+      File.write(File.join(tree, 'lib', 'version.rb'), "LICH_VERSION = '6.0.0'\n")
+      allow(Lich::Util::Update::Tarball).to receive(:with_extracted).and_yield(tree)
+
+      installer.download_branch_update('elanthia-online/lich-6:main')
+    end
+
+    expect(Lich::Util::Update).to have_received(:store_branch_tracking).with('main', 'elanthia-online/lich-6', '6.0.0')
+    # After a restart --revert runs the installed tree's code, so the way
+    # back by hand is given before the user restarts.
+    steps = expected_branch_recovery_steps('/backup/L5-snapshot-2026-11-19-00-00-00')
+    saved = messages.index(steps.first)
+    expect(saved).not_to be_nil
+    expect(messages[saved, steps.size]).to eq(steps)
+    expect(saved).to be < messages.index('You should exit the game, then log back in to use the updated version.')
+  end
+
+  it 'names where relative --lib-dir and --script-dir paths really are, since Lich resolves them against LICH_DIR' do
+    stub_const('LIB_DIR', './lib')
+    stub_const('SCRIPT_DIR', 'scripts')
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+
+    installer.send(:respond_recovery_steps, 'backup/L5-snapshot-2026-11-20-00-00-00')
+
+    expect(messages).to eq(expected_branch_recovery_steps('backup/L5-snapshot-2026-11-20-00-00-00', lib_dir: './lib', script_dir: 'scripts'))
+    expect(messages).to include(a_string_including("into the now empty #{File.join(File.expand_path(LICH_DIR), 'lib')}."))
+    expect(messages.first).to eq("Your previous installation is saved in: #{File.join(File.expand_path(LICH_DIR), 'backup', 'L5-snapshot-2026-11-20-00-00-00')}")
+  end
+
+  it 'shows the usage text for an empty --branch= given to the command' do
+    allow(Lich::Util::Update).to receive(:branch_installer).and_return(installer)
+
+    Lich::Util::Update.request('--branch=')
+
+    expect(messages).to include(a_string_matching(/incomplete/))
+    expect(messages).to include(a_string_including('<owner>/<repo>:<branch_name>'))
+    expect(snapshot_manager).not_to have_received(:snapshot)
+  end
+end
+
+RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be installed' do
+  let(:snapshot_manager) { instance_double(Lich::Util::Update::SnapshotManager) }
+  # The real check, so these examples test what it accepts, not a stub.
+  let(:release_installer) { Lich::Util::Update::ReleaseInstaller.new(nil, nil, nil) }
+  let(:installer) { Lich::Util::Update::BranchInstaller.new(snapshot_manager, release_installer) }
+  let(:messages) { [] }
+  let(:downloads) { [] }
+
+  around do |example|
+    Dir.mktmpdir do |dir|
+      @tree = dir
+      example.run
+    end
+  end
+
+  before do
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+    allow(snapshot_manager).to receive(:snapshot).and_yield('/backup/L5-snapshot-2026-11-20-00-00-00')
+    allow(Lich::Util::Update::Tarball).to receive(:with_extracted) do |url, _name, &block|
+      downloads << url
+      block.call(@tree)
+    end
+    allow(release_installer).to receive(:perform_update)
+    allow(Lich::Util::Update).to receive(:store_branch_tracking)
+  end
+
+  def lay_out(*entries)
+    entries.each do |entry|
+      path = File.join(@tree, entry)
+      FileUtils.mkdir_p(File.dirname(path))
+      if entry == 'lib'
+        FileUtils.mkdir_p(path)
+      else
+        File.write(path, entry == 'lib/version.rb' ? "LICH_VERSION = '6.0.0'\n" : "# #{entry}\n")
+      end
+    end
+  end
+
+  it 'downloads an allowlisted repository that is not Lich, then refuses it before installing' do
+    # A scripts repository: a lib/ but no launcher.
+    lay_out('lib/helper.rb', 'Gemfile', 'LICENSE')
+
+    installer.download_branch_update('elanthia-online/scripts:master')
+
+    expect(downloads).to eq(['https://github.com/elanthia-online/scripts/archive/refs/heads/master.tar.gz'])
+    expect(release_installer).not_to have_received(:perform_update)
+    expect(Lich::Util::Update).not_to have_received(:store_branch_tracking)
+    expect(messages).to include(a_string_including('does not appear to be a valid Lich installation'))
+    expect(messages).to include('Your installation has been preserved.')
+  end
+
+  it 'refuses a tree without lib/version.rb before installing' do
+    lay_out('lib/lich.rb', 'lich.rbw', 'Gemfile', 'LICENSE')
+
+    installer.download_branch_update('elanthia-online/lich-6:main')
+
+    expect(release_installer).not_to have_received(:perform_update)
+    expect(messages).to include(a_string_including('has no lib/version.rb'))
+    expect(messages).to include('Your installation has been preserved.')
+  end
+
+  # The version is read without running the file, stored, and compared with
+  # Gem::Version at login; store_branch_tracking reads the file as text.
+  {
+    'a computed version'                                 => "LICH_VERSION = [6, 0, 0].join('.')\n",
+    'an interpolated version'                            => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
+    'a v prefix'                                         => "LICH_VERSION = 'v6.0.0'\n",
+    'build metadata'                                     => "LICH_VERSION = '6.0.0-alpha+x'\n",
+    'a valid version only in a comment'                  => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
+    'two assignments'                                    => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
+    'an assignment inside a module (Lich::LICH_VERSION)' => "module Lich\n  LICH_VERSION = '6.0.0'\nend\n",
+    'an indented assignment'                             => "  LICH_VERSION = '6.0.0'\n",
+    'a valid prefix with a suffix appended'              => "LICH_VERSION = '6.0.0' + '-x+y'\n",
+    'a valid prefix with a method call'                  => "LICH_VERSION = '6.0.0'.succ\n",
+    'a byte that is not UTF-8'                           => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
+  }.each do |shape, content|
+    it "refuses a lib/version.rb with #{shape} before installing" do
+      lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
+      File.binwrite(File.join(@tree, 'lib', 'version.rb'), content)
+
+      installer.download_branch_update('elanthia-online/lich-6:main')
+
+      expect(release_installer).not_to have_received(:perform_update)
+      expect(messages).to include(a_string_including("must be UTF-8 and assign LICH_VERSION once, a version number in quotes (e.g. '6.0.0')"))
+      expect(messages).to include('Your installation has been preserved.')
+    end
+  end
+
+  {
+    '6.0.0'                           => "LICH_VERSION = '6.0.0'\n",
+    '5.13.0-beta.2'                   => "LICH_VERSION = '5.13.0-beta.2'\n",
+    '6.0.0 frozen, with a comment'    => "LICH_VERSION = '6.0.0'.freeze # release 6\n",
+    '6.0.0 with Windows line endings' => "# frozen_string_literal: true\r\nLICH_VERSION = \"6.0.0\"\r\n",
+    '6.0.0 behind a byte-order mark'  => "#{Lich::Util::Update::SnapshotManager::UTF8_BOM}LICH_VERSION = '6.0.0'\n".b
+  }.each do |label, content|
+    version = label.split.first
+    it "installs a lib/version.rb declaring #{label}" do
+      lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
+      File.binwrite(File.join(@tree, 'lib', 'version.rb'), content)
+
+      installer.download_branch_update('elanthia-online/lich-6:main')
+
+      expect(release_installer).to have_received(:perform_update).with(@tree, version, anything)
+    end
+  end
+
+  it 'says the installation was changed when a step after replacing lib/ fails' do
+    lay_out('lib/version.rb', 'lich.rbw', 'Gemfile', 'LICENSE')
+    allow(Lich::Util::Update).to receive(:store_branch_tracking).and_raise(Errno::ENOENT, 'lib/version.rb')
+
+    installer.download_branch_update('elanthia-online/lich-6:main')
+
+    expect(release_installer).to have_received(:perform_update)
+    expect(messages).to include('The update failed after it had started replacing your installation.')
+    steps = expected_branch_recovery_steps('/backup/L5-snapshot-2026-11-20-00-00-00')
+    changed = messages.index('The update failed after it had started replacing your installation.')
+    expect(messages[changed + 1, steps.size]).to eq(steps)
+    expect(messages).not_to include('Your installation has been preserved.')
+  end
+
+  it 'says the installation was changed when perform_update itself fails' do
+    lay_out('lib/version.rb', 'lich.rbw', 'Gemfile', 'LICENSE')
+    allow(release_installer).to receive(:perform_update).and_raise(Errno::EACCES, 'lich.rbw')
+
+    installer.download_branch_update('elanthia-online/lich-6:main')
+
+    expect(messages).to include('The update failed after it had started replacing your installation.')
+    expect(messages).not_to include('Your installation has been preserved.')
+  end
+
+  context 'when the download fails' do
+    def fail_download(status)
+      allow(Lich::Util::Update::Tarball).to receive(:with_extracted)
+        .and_raise(OpenURI::HTTPError.new(status, StringIO.new))
+    end
+
+    it 'names the repository when it is not found' do
+      fail_download('404 Not Found')
+
+      installer.download_branch_update('elanthia-online/lich-6:main')
+
+      expect(messages).to include(a_string_including("repository 'elanthia-online/lich-6' and its branch 'main'"))
+      expect(messages.grep(/another repository/)).to be_empty
+    end
+
+    it 'suggests the owner/repo:branch form for a lich-5 branch with a slash that is not found' do
+      fail_download('404 Not Found')
+
+      installer.download_branch_update('elanthia-online/lich-6')
+
+      expect(messages).to include(a_string_including('--branch=<owner>/<repo>:<branch_name>'))
+    end
+
+    it 'does not claim the branch may not exist for other HTTP errors' do
+      fail_download('403 rate limit exceeded')
+
+      installer.download_branch_update('elanthia-online/lich-6:main')
+
+      expect(messages).to include('HTTP Error: 403 rate limit exceeded')
+      expect(messages.grep(/verify that repository/)).to be_empty
+    end
+  end
+end
