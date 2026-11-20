@@ -123,9 +123,13 @@ module Lich
       # tell a complete reply from a cut-off one, so it is requested here and then
       # dropped from the lines handed back.
       #
-      # The start line is never taken as the end line (issue_command only looks
-      # for the end on the lines after it), so a reply needs at least two lines
-      # to count as complete.
+      # A reply needs at least two lines to count as complete here: the last
+      # line is dropped as the end line, and for a one-line reply that would be
+      # the start line. issue_command itself does end on a start line that also
+      # matches end_pattern, so such a one-line reply is captured in full but
+      # reported as not complete. No current caller's start line also matches
+      # its end pattern. Moving this onto Lich::Util.capture_command's status
+      # would remove the limit.
       #
       # Used for replies that end on a game line such as Roundtime (COMMUNE SENSE,
       # ASSESS TEACH, PERC MANA); see capture_to_prompt for replies that end on

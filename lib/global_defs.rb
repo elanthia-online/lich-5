@@ -1480,26 +1480,50 @@ def multifput(*cmds)
   cmds.flatten.compact.each { |cmd| fput(cmd) }
 end
 
+# Sends a command and waits for the game's reply, resending it when the
+# game refuses it for a reason that passes: a roundtime ("...wait 3
+# seconds."), type-ahead, a stun or web, or a failed attempt to stand (fput
+# sends 'stand' first). The reply line it returns is put back at the front
+# of the script's downstream buffer.
+#
+# Options go in a trailing Hash, after any patterns.
+#
+# @param message [String] the command to send
+# @param waitingfor [Array<String, Regexp, Hash>] patterns, any of which the
+#   reply must match (otherwise fput resends after a second; none: any reply
+#   that is not a refusal), then optionally the options Hash
+# @option waitingfor [Numeric] :timeout seconds with no game response before
+#   giving up (60; 0 disables, the original behavior)
+# @option waitingfor [Integer, nil] :max_resends how many times a refusal may
+#   trigger a resend before giving up (nil, the original: unbounded)
+# @option waitingfor [#call, nil] :interrupt called with no arguments on
+#   every wait and before every resend; a truthy result ends the send at once
+# @option waitingfor [#call, nil] :on_send called with the command (a String:
+#   the message, a resend of it, or 'stand') just before each send, after
+#   fput has cleared the script's buffer; Util.capture_command uses it to
+#   restart its capture on each send
+# @option waitingfor [Boolean] :resend_transient on a transient refusal that
+#   is not a stun or a web (a "can't seem", "don't seem"), resend after a
+#   quarter second instead of giving up (false, the original; bigshot's
+#   bs_put resends)
+# @option waitingfor [Symbol] :failures :false (the original: every failure
+#   returns false) or :symbol, to tell failures apart
+# @return [String] the reply line, when no patterns were given
+# @return [String, Regexp] the pattern the reply matched, when patterns were
+#   given
+# @return [false] on any failure, by default; also when no script is running
+# @return [Symbol] with failures: :symbol, the failure: :no_response,
+#   :too_many_resends, :interrupted, :dead or :refused
+# @raise [ArgumentError] if :interrupt or :on_send is not callable
+# @example Wait for one of two replies, giving up after 10 seconds
+#   fput('get sword', /You get/, /What were you/, timeout: 10)
+# @example Count every send, resends included
+#   sends = 0
+#   fput('stand', on_send: ->(_command) { sends += 1 })
 def fput(message, *waitingfor)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   waitingfor.flatten!
 
-  # Options via a trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
-  #   timeout:          seconds with no game response before giving up (60;
-  #                     0 disables, the original behavior)
-  #   max_resends:      how many times a refusal ("...wait 3", "struggle to
-  #                     stand", stunned) may trigger a resend before giving
-  #                     up (nil, the original: unbounded)
-  #   interrupt:        a callable checked on every wait and before every
-  #                     resend; true ends the send at once (nil: never)
-  #   resend_transient: on a transient refusal that is not a stun or a
-  #                     web (a "can't seem", "don't seem"), resend after a
-  #                     quarter second instead of giving up (false, the
-  #                     original; bigshot's bs_put resends)
-  #   failures:         :false (the original: every failure returns false)
-  #                     or :symbol - :no_response, :too_many_resends,
-  #                     :interrupted, :dead, :refused - so a caller can
-  #                     tell them apart
   options = (waitingfor.pop if waitingfor.last.is_a?(Hash)) || {}
   option = ->(key) { options[key] || options[key.to_s] }
   timeout = option.call(:timeout) || 60
@@ -1507,6 +1531,14 @@ def fput(message, *waitingfor)
   interrupt = option.call(:interrupt)
   unless interrupt.nil? || interrupt.respond_to?(:call)
     raise ArgumentError, "fput: interrupt: must respond to call"
+  end
+  on_send = option.call(:on_send)
+  unless on_send.nil? || on_send.respond_to?(:call)
+    raise ArgumentError, "fput: on_send: must respond to call"
+  end
+  send_command = lambda do |command|
+    on_send&.call(command)
+    put(command)
   end
   resend_transient = option.call(:resend_transient) ? true : false
   symbols = option.call(:failures) == :symbol
@@ -1525,7 +1557,9 @@ def fput(message, *waitingfor)
 
       Script.execution_sleep(0.1)
     end
-    false
+    # once more after the last slice, so a deadline that passed during the
+    # wait stops the resend that follows it
+    interrupted.call
   end
   resends = 0
   # true after 'stand' went out and before its reply came back; the reply
@@ -1538,7 +1572,7 @@ def fput(message, *waitingfor)
   end
 
   clear
-  put(message)
+  send_command.call(message)
 
   timer = Time.now
   loop do
@@ -1565,7 +1599,7 @@ def fput(message, *waitingfor)
 
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     elsif string =~ /^You.+struggle.+stand/
       # stand in this frame, under the same cap and interrupt, instead of
@@ -1577,7 +1611,7 @@ def fput(message, *waitingfor)
 
       standing = true
       clear
-      put('stand')
+      send_command.call('stand')
       next
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
@@ -1610,17 +1644,20 @@ def fput(message, *waitingfor)
         script.downstream_buffer.unshift(string)
         return fail_with.call(:too_many_resends)
       end
+      return fail_with.call(:interrupted) if interrupted.call
 
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     elsif standing
       # the reply to 'stand' ("You stand back up.", "You are already
       # standing"): message went unanswered, send it again
+      return fail_with.call(:interrupted) if interrupted.call
+
       standing = false
       clear
-      put(message)
+      send_command.call(message)
       next
     else
       if waitingfor.empty?
@@ -1635,7 +1672,7 @@ def fput(message, *waitingfor)
         return fail_with.call(:interrupted) if wait.call(1)
 
         clear
-        put(message)
+        send_command.call(message)
         next
       end
     end
