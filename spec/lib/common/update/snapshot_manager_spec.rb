@@ -313,7 +313,7 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(described_class::SNAPSHOT_TOP_LEVEL_FILES).to eq(Lich::Util::Update::ReleaseInstaller::TOP_LEVEL_FILES - %w[Gemfile.lock])
     end
 
-    it 'copies Gemfile and LICENSE but never Gemfile.lock, which Bundler regenerates' do
+    it 'copies Gemfile and LICENSE but never Gemfile.lock, which no Lich archive ships' do
       write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
       write(File.join(LICH_DIR, 'Gemfile.lock'), "# lock 5.22.0\n")
       write(File.join(LICH_DIR, 'LICENSE'), "# LICENSE\n")

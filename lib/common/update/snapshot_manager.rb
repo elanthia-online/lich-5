@@ -15,10 +15,9 @@
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
   Lich will not start and cannot run the revert again. The snapshot itself
   is untouched: copying its lib/, the core scripts in its scripts/, its
-  lich.rbw and any Gemfile and LICENSE it has back by hand (and deleting
-  Gemfile.lock, which Bundler regenerates from the Gemfile), or running
-  the revert from another session of this installation that is
-  still running, restores it. On Windows each rename
+  lich.rbw and any Gemfile and LICENSE it has back by hand, or running
+  the revert from another session of this installation that is still
+  running, restores it. On Windows each rename
   of the swap that Windows refuses keeps this window open for up to about 3
   seconds while it is retried; Lich says so while it waits.
 =end
@@ -401,9 +400,10 @@ module Lich
         end
 
         # Top-level files a snapshot keeps: those an update overwrites
-        # (ReleaseInstaller::TOP_LEVEL_FILES) except Gemfile.lock. A lock
-        # file is generated from the live Gemfile, and Bundler regenerates a
-        # missing one, so it is neither kept nor put back.
+        # (ReleaseInstaller::TOP_LEVEL_FILES) except Gemfile.lock. Lich's
+        # release and branch archives do not contain a lock file
+        # (.gitattributes export-ignores it), so an update never replaces
+        # one, and it is neither kept nor put back.
         # (A literal, as this file loads before ReleaseInstaller.)
         SNAPSHOT_TOP_LEVEL_FILES = %w[Gemfile LICENSE].freeze
 

@@ -347,14 +347,13 @@ def expected_branch_recovery_steps(snapshot_dir, lib_dir: LIB_DIR, script_dir: S
   ["Your previous installation is saved in: #{saved}",
    "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until",
    "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but",
-   'may not put back Gemfile and LICENSE. For those, do steps 3 and 4.',
-   'If Lich will not start, or to come back to this snapshot later, do all four:',
+   'may not put back Gemfile and LICENSE. For those, do step 3.',
+   "If Lich will not start, or to put back this snapshot's program files later, do all three:",
    "  1. Move everything in #{lib_dir} to a new folder outside it and keep that",
    '     folder (a failed --revert may have left the only copy of files there), then',
    "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}.",
    "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}.",
-   "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}.",
-   "  4. Delete Gemfile.lock in #{lich_dir} if there is one; Bundler regenerates it from the Gemfile."]
+   "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}."]
 end
 
 # --branch names a lich-5 branch, a fork's lich-5 branch (owner:branch), or a
@@ -561,15 +560,17 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
   # The version is read without running the file, stored, and compared with
   # Gem::Version at login; store_branch_tracking reads the file as text.
   {
-    'a computed version'                    => "LICH_VERSION = [6, 0, 0].join('.')\n",
-    'an interpolated version'               => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
-    'a v prefix'                            => "LICH_VERSION = 'v6.0.0'\n",
-    'build metadata'                        => "LICH_VERSION = '6.0.0-alpha+x'\n",
-    'a valid version only in a comment'     => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
-    'two assignments'                       => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
-    'a valid prefix with a suffix appended' => "LICH_VERSION = '6.0.0' + '-x+y'\n",
-    'a valid prefix with a method call'     => "LICH_VERSION = '6.0.0'.succ\n",
-    'a byte that is not UTF-8'              => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
+    'a computed version'                                 => "LICH_VERSION = [6, 0, 0].join('.')\n",
+    'an interpolated version'                            => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
+    'a v prefix'                                         => "LICH_VERSION = 'v6.0.0'\n",
+    'build metadata'                                     => "LICH_VERSION = '6.0.0-alpha+x'\n",
+    'a valid version only in a comment'                  => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
+    'two assignments'                                    => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
+    'an assignment inside a module (Lich::LICH_VERSION)' => "module Lich\n  LICH_VERSION = '6.0.0'\nend\n",
+    'an indented assignment'                             => "  LICH_VERSION = '6.0.0'\n",
+    'a valid prefix with a suffix appended'              => "LICH_VERSION = '6.0.0' + '-x+y'\n",
+    'a valid prefix with a method call'                  => "LICH_VERSION = '6.0.0'.succ\n",
+    'a byte that is not UTF-8'                           => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
   }.each do |shape, content|
     it "refuses a lib/version.rb with #{shape} before installing" do
       lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')

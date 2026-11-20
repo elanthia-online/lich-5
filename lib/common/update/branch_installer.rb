@@ -35,8 +35,11 @@ module Lich
         REPO_SPEC_PATTERN = %r{\A(?<owner>[A-Za-z0-9-]+)/(?<repo>[A-Za-z0-9._-]+)\z}.freeze
         # A LICH_VERSION assignment whose whole value is one quoted literal:
         # nothing may follow the closing quote but .freeze and a comment, so
-        # the value read is the value Lich runs (not '6.0.0' + suffix).
-        COMPLETE_VERSION_ASSIGNMENT = /^[ \t]*LICH_VERSION[ \t]*=[ \t]*(['"])([^'"\r\n]+)\1(?:\.freeze)?[ \t]*(?:#[^\r\n]*)?\r?$/.freeze
+        # the value read is the value Lich runs (not '6.0.0' + suffix). It
+        # must start in column 0: an indented one is usually inside a module
+        # (Lich::LICH_VERSION), and startup reads the top-level constant.
+        # Every lib/version.rb in lich-5's history assigns it in column 0.
+        COMPLETE_VERSION_ASSIGNMENT = /^LICH_VERSION[ \t]*=[ \t]*(['"])([^'"\r\n]+)\1(?:\.freeze)?[ \t]*(?:#[^\r\n]*)?\r?$/.freeze
 
         # @param snapshot_manager [SnapshotManager] snapshot management instance
         # @param release_installer [ReleaseInstaller] installer for performing updates
@@ -209,7 +212,8 @@ module Lich
         end
 
         # Tells the user where the snapshot taken before this update is, what
-        # --revert restores from it and how to put everything back by hand.
+        # --revert restores from it and how to put Lich's program files back
+        # by hand.
         # --revert does not restore the top-level files, and after a restart
         # it runs the installed tree's code, so these steps are the only way
         # back that always works. Each live directory is named on its own, as
@@ -229,14 +233,13 @@ module Lich
           respond "Your previous installation is saved in: #{saved}"
           respond "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until"
           respond "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but"
-          respond "may not put back Gemfile and LICENSE. For those, do steps 3 and 4."
-          respond "If Lich will not start, or to come back to this snapshot later, do all four:"
+          respond "may not put back Gemfile and LICENSE. For those, do step 3."
+          respond "If Lich will not start, or to put back this snapshot's program files later, do all three:"
           respond "  1. Move everything in #{lib_dir} to a new folder outside it and keep that"
           respond "     folder (a failed --revert may have left the only copy of files there), then"
           respond "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}."
           respond "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}."
           respond "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}."
-          respond "  4. Delete Gemfile.lock in #{lich_dir} if there is one; Bundler regenerates it from the Gemfile."
         end
 
         # Names the lich-5 repository of +owner+.
