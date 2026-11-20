@@ -86,33 +86,40 @@ RSpec.describe Lich::Gemstone::Overwatch do
   end
 
   describe 'Term::SILENT_CANNIBAL_SWING / SILENT_CANNIBAL_GRAPPLE (bloody halfling cannibal)' do
-    # 3rd-person lines reconstructed from plain-text Overwatch logs using the player-link
-    # markup captured live for REVEALED_EXPLODES; player name anonymized.
-    player = '<a exist="-1234567" noun="Examplechar">Examplechar</a>'
-    swing = ->(target) do
-      'With an ululating shriek, <pushBold/>a <a exist="356982" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
-        "leaps from the shadows and hurtles at #{target}, swinging wildly with a " \
-        '<a exist="356990" noun="dagger">twisted obsidian dagger</a>!'
-    end
-    grapple = ->(target) do
-      'With an ululating shriek, <pushBold/>a <a exist="356982" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
-        'leaps from the shadows and throws <pushBold/><a exist="356982" noun="cannibal">her</a><popBold/> ' \
-        "wiry arms around #{target}, fueled by panicked hunger!"
-    end
-
+    # Raw XML captured live (two characters in the same fight); player names anonymized.
     {
-      'swing, 1st-person view (attacking you)'              => [:SILENT_CANNIBAL_SWING, swing.call('you')],
-      'swing, 3rd-person view (attacking another player)'   => [:SILENT_CANNIBAL_SWING, swing.call(player)],
-      'grapple, 1st-person view (attacking you)'            => [:SILENT_CANNIBAL_GRAPPLE, grapple.call('you')],
-      'grapple, 3rd-person view (attacking another player)' => [:SILENT_CANNIBAL_GRAPPLE, grapple.call(player)],
-    }.each do |desc, (const, raw)|
+      'swing, 1st-person view (attacking you)'              => [
+        :SILENT_CANNIBAL_SWING, '1312018',
+        'With an ululating shriek, <pushBold/>a <a exist="1312018" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and hurtles at you, swinging wildly with a ' \
+          '<a exist="1312019" noun="dagger">twisted obsidian dagger</a>!'
+      ],
+      'swing, 3rd-person view (attacking another player)'   => [
+        :SILENT_CANNIBAL_SWING, '1312018',
+        'With an ululating shriek, <pushBold/>a <a exist="1312018" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and hurtles at <a exist="-1234567" noun="Examplechar">Examplechar</a>, swinging wildly with a ' \
+          '<a exist="1312019" noun="dagger">twisted obsidian dagger</a>!'
+      ],
+      'grapple, 1st-person view (attacking you)'            => [
+        :SILENT_CANNIBAL_GRAPPLE, '1312024',
+        'With an ululating shriek, <pushBold/>a <a exist="1312024" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and throws <pushBold/><a exist="1312024" noun="cannibal">his</a><popBold/> ' \
+          'wiry arms around you, fueled by panicked hunger!'
+      ],
+      'grapple, 3rd-person view (attacking another player)' => [
+        :SILENT_CANNIBAL_GRAPPLE, '1312024',
+        'With an ululating shriek, <pushBold/>a <a exist="1312024" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and throws <pushBold/><a exist="1312024" noun="cannibal">his</a><popBold/> ' \
+          'wiry arms around <a exist="-7654321" noun="Otherchar">Otherchar</a>, fueled by panicked hunger!'
+      ],
+    }.each do |desc, (const, id, raw)|
       context desc do
         let(:line) { raw }
 
         it 'captures the creature id, noun and name' do
           match = line.match(term.const_get(const))
           expect(match).not_to be_nil
-          expect(match[:id]).to eq('356982')
+          expect(match[:id]).to eq(id)
           expect(match[:noun]).to eq('cannibal')
           expect(match[:name]).to eq('bloody halfling cannibal')
         end
@@ -124,7 +131,7 @@ RSpec.describe Lich::Gemstone::Overwatch do
 
         it 'pushes the creature as a silent strike via Observer.consume' do
           expect(described_class).to receive(:push_revealed_targets)
-            .with('356982', 'cannibal', 'bloody halfling cannibal', silent_strike: true)
+            .with(id, 'cannibal', 'bloody halfling cannibal', silent_strike: true)
           described_class::Observer.consume(line, described_class::Observer.wants?(line))
         end
       end
