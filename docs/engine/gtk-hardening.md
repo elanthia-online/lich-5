@@ -8,7 +8,7 @@ instructions to configure or extend WebUI.
 
 The current script-local shim is a
 bounded migration bridge into WebUI. Core and native WebUI consumers do not load
-GTK. The [author guide](../webui-integration.md) describes supported methods,
+GTK. The [author guide](https://github.com/elanthia-online/lich-5/wiki/WebUI-Script-Author-Guide) describes supported methods,
 refusals, declared presentation omissions, and the shared owner lifecycle.
 
 - `Gtk.main` and `Gtk.main_quit` report that native-loop control is omitted;

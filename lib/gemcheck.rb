@@ -411,8 +411,8 @@ module Lich
 
     # Composes the alert dialog body: platform message + a bulleted list of
     # detected missing gems, plus the underlying error when one was captured.
-    # The error is shown even when gems are listed: a failed `require 'gtk3'`
-    # may mean a native DLL failed to load even though every gem is installed,
+    # The error is shown even when gems are listed: a failed `require 'sqlite3'`
+    # may mean a native library failed to load even though every gem is installed,
     # so hiding the message behind the missing-gems list misdiagnoses the
     # fault. Errors whose dialog text already states them are not repeated.
     # @param missing [Array<String>]
@@ -622,7 +622,7 @@ module Lich
 
         # A start can stop after GemCheck queued notes and before init.rb
         # flushes them to the Lich debug log: activate! raising, or a later
-        # sqlite3 or gtk3 alert in init.rb. This start stops, so the notes go
+        # sqlite3 alert in init.rb. This start stops, so the notes go
         # in this entry. Flushing clears the queue, so no note reaches both logs.
         notes = []
         flush_startup_notes { |message| notes << message }

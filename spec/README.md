@@ -92,7 +92,7 @@ NATIVE_HOST=1 rspec spec/lib/webui/native_host_presentation_spec.rb
 The opt-in `ruby bench/native_webui_smoke.rb` opens native and shim windows for
 manual focus, topmost, opacity, resize and close checks on a supported host. It
 is interactive and is not a CI test. Native platform and actual script-operation
-acceptance belong to beta testing. See the [WebUI author guide](../docs/webui-integration.md).
+acceptance belong to beta testing. See the [WebUI author guide](https://github.com/elanthia-online/lich-5/wiki/WebUI-Script-Author-Guide).
 
 ## Directory Structure
 

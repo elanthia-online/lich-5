@@ -8,7 +8,7 @@
 
 ## About
 
-Lich uses WebUI for its graphical launcher and script interfaces. Native GTK is no longer the graphical runtime. A bounded, script-only compatibility bridge gives existing supported scripts time to migrate; new interfaces use native WebUI. See the [WebUI author guide](docs/webui-integration.md) for APIs, host prerequisites and migration boundaries.
+Lich uses WebUI for its graphical launcher and script interfaces. Native GTK is no longer the graphical runtime. A bounded, script-only compatibility bridge gives existing supported scripts time to migrate; new interfaces use native WebUI. See the [WebUI author guide](https://github.com/elanthia-online/lich-5/wiki/WebUI-Script-Author-Guide) for APIs, host prerequisites and migration boundaries.
 
 Lich is an open source scripting engine for Simutronics' text-based games DragonRealms and GemStone IV. It operates alongside a chosen frontend and allows users to write and run scripts in Ruby.
 
@@ -16,7 +16,7 @@ Lich was originally created by Shaelun, who brought it up from an idea to versio
 
 ## Usage
 
-Installation guidance is available below. WebUI host prerequisites and validation commands are documented in the author guide linked above.
+Installation guidance is available below. WebUI host prerequisites are documented in the author guide linked above; validation commands are in the [spec README](spec/README.md).
 
 * DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich
 * Gemstone IV - https://gswiki.play.net/Lich:Software/Installation
