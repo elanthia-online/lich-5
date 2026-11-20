@@ -103,7 +103,7 @@ module Lich
                 # read is the one Lich runs.
                 content = File.binread(version_file_path)
                 utf8 = content.dup.force_encoding(Encoding::UTF_8).valid_encoding?
-                single = content.scan(SnapshotManager::LICH_VERSION_PATTERN).size == 1
+                single = SnapshotManager.version_assignments(content).size == 1
                 unless utf8 && single && version && Gem::Version.correct?(version)
                   raise StandardError, "Downloaded branch's lib/version.rb must be UTF-8 and assign LICH_VERSION once, a version number in quotes (e.g. '6.0.0'), which this updater needs to install and revert it"
                 end

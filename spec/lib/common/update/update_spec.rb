@@ -581,10 +581,15 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
     end
   end
 
-  %w[6.0.0 5.13.0-beta.2].each do |version|
-    it "installs a lib/version.rb declaring #{version}" do
+  {
+    '6.0.0'                          => "LICH_VERSION = '6.0.0'\n",
+    '5.13.0-beta.2'                  => "LICH_VERSION = '5.13.0-beta.2'\n",
+    '6.0.0 behind a byte-order mark' => "#{Lich::Util::Update::SnapshotManager::UTF8_BOM}LICH_VERSION = '6.0.0'\n".b
+  }.each do |label, content|
+    version = label.split.first
+    it "installs a lib/version.rb declaring #{label}" do
       lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
-      File.write(File.join(@tree, 'lib', 'version.rb'), "LICH_VERSION = '#{version}'\n")
+      File.binwrite(File.join(@tree, 'lib', 'version.rb'), content)
 
       installer.download_branch_update('elanthia-online/lich-6:main')
 

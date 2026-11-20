@@ -131,6 +131,21 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(version_of("# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n")).to eq('v6')
     end
 
+    it 'reads an assignment on line 1 behind a UTF-8 byte-order mark, as Ruby runs it' do
+      expect(version_of("#{described_class::UTF8_BOM}LICH_VERSION = '5.25.0'\n".b)).to eq('5.25.0')
+    end
+
+    it 'reverts a snapshot whose lib/version.rb starts with a byte-order mark' do
+      install('5.22.0')
+      dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+      File.binwrite(File.join(dir, 'lib', 'version.rb'), "#{described_class::UTF8_BOM}LICH_VERSION = '5.21.0'\n".b)
+      allow(Lich::Util::Update).to receive(:clear_branch_tracking)
+
+      manager.revert
+
+      expect(File.binread(File.join(LIB_DIR, 'version.rb'))).to start_with(described_class::UTF8_BOM)
+    end
+
     it 'reads an indented assignment, as in a module body' do
       expect(version_of("module Lich\n  LICH_VERSION = '5.25.0'\nend\n")).to eq('5.25.0')
     end

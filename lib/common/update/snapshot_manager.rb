@@ -35,6 +35,10 @@ module Lich
         # in place of the real one. Every lib/version.rb in lich-5's history
         # assigns it at the start of a line.
         LICH_VERSION_PATTERN = /^[ \t]*LICH_VERSION[ \t]*=[ \t]*['"]([^'"\n]+)['"]/.freeze
+        # UTF-8 byte-order mark. Ruby skips one at the start of a file and
+        # runs the rest, so the reader must too, or an assignment on line 1
+        # behind it is not at the start of a line.
+        UTF8_BOM = [0xEF, 0xBB, 0xBF].pack('C*').freeze
 
         # Reads the version a version.rb declares, without running it. Shared
         # with ReleaseInstaller#extract_version_from_file, so a tree an
@@ -44,10 +48,21 @@ module Lich
         # @return [String, nil] the declared LICH_VERSION, or nil when the
         #   file is missing, unreadable or does not assign it a literal
         def self.declared_version(version_file)
-          match = LICH_VERSION_PATTERN.match(File.binread(version_file))
-          match && match[1].dup.force_encoding(Encoding::UTF_8)
+          version_assignments(File.binread(version_file)).first
         rescue SystemCallError
           nil
+        end
+
+        # Every LICH_VERSION assigned a string literal at the start of a
+        # line in a version.rb's bytes, in file order, after a leading
+        # byte-order mark. BranchInstaller requires exactly one.
+        #
+        # @param content [String] the file's bytes
+        # @return [Array<String>] the assigned values, UTF-8
+        def self.version_assignments(content)
+          content = content.b
+          content = content.byteslice(UTF8_BOM.bytesize..) if content.start_with?(UTF8_BOM)
+          content.scan(LICH_VERSION_PATTERN).map { |(value)| value.dup.force_encoding(Encoding::UTF_8) }
         end
 
         CORE_SCRIPTS = %w[
