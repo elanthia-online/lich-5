@@ -227,17 +227,10 @@ jobs:
           set -euo pipefail
           mkdir -p Lich5 Lich5/data Lich5/scripts
 
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic         > Lich5/scripts/alias.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic     > Lich5/scripts/autostart.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic       > Lich5/scripts/ewaggle.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic           > Lich5/scripts/go2.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic          > Lich5/scripts/jinx.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic  > Lich5/scripts/lich5-update.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic           > Lich5/scripts/log.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic           > Lich5/scripts/map.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic    > Lich5/scripts/repository.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic          > Lich5/scripts/vars.lic
-          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic       > Lich5/scripts/version.lic
+          # Each default script is the newest version on elanthia-online/scripts
+          # master that this release's Lich version (lib/version.rb) can run. Ruby
+          # is the one the contract check set up at the start of this job.
+          ruby .github/scripts/bundle_default_scripts.rb --dest Lich5/scripts
           curl -fsSL https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic         > Lich5/scripts/dependency.lic
           curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
 
