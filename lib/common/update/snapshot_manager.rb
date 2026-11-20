@@ -39,18 +39,36 @@ module Lich
         # runs the rest, so the reader must too, or an assignment on line 1
         # behind it is not at the start of a line.
         UTF8_BOM = [0xEF, 0xBB, 0xBF].pack('C*').freeze
+        # The pattern main used, which also reads forms some forks' version
+        # files use and LICH_VERSION_PATTERN does not: an assignment split
+        # across lines, and a qualified constant (::LICH_VERSION). Only used
+        # when LICH_VERSION_PATTERN finds nothing, so snapshots main restores
+        # are still restored.
+        LEGACY_LICH_VERSION_PATTERN = /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/.freeze
 
         # Reads the version a version.rb declares, without running it. Shared
         # with ReleaseInstaller#extract_version_from_file, so a tree an
         # update accepts has a version #revert can read from its snapshot.
+        # An assignment at the start of a line is read first; failing that,
+        # the first match of LEGACY_LICH_VERSION_PATTERN.
         #
         # @param version_file [String] path to a version.rb
         # @return [String, nil] the declared LICH_VERSION, or nil when the
         #   file is missing, unreadable or does not assign it a literal
         def self.declared_version(version_file)
-          version_assignments(File.binread(version_file)).first
+          content = File.binread(version_file)
+          version_assignments(content).first ||
+            without_bom(content)[LEGACY_LICH_VERSION_PATTERN, 1]&.dup&.force_encoding(Encoding::UTF_8)
         rescue SystemCallError
           nil
+        end
+
+        # @param content [String] a file's bytes
+        # @return [String] the bytes, binary, without a leading UTF-8
+        #   byte-order mark
+        def self.without_bom(content)
+          content = content.b
+          content.start_with?(UTF8_BOM) ? content.byteslice(UTF8_BOM.bytesize..) : content
         end
 
         # Every LICH_VERSION assigned a string literal at the start of a
@@ -60,9 +78,7 @@ module Lich
         # @param content [String] the file's bytes
         # @return [Array<String>] the assigned values, UTF-8
         def self.version_assignments(content)
-          content = content.b
-          content = content.byteslice(UTF8_BOM.bytesize..) if content.start_with?(UTF8_BOM)
-          content.scan(LICH_VERSION_PATTERN).map { |(value)| value.dup.force_encoding(Encoding::UTF_8) }
+          without_bom(content).scan(LICH_VERSION_PATTERN).map { |(value)| value.dup.force_encoding(Encoding::UTF_8) }
         end
 
         CORE_SCRIPTS = %w[

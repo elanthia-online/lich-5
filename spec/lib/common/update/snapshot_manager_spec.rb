@@ -146,6 +146,30 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       expect(File.binread(File.join(LIB_DIR, 'version.rb'))).to start_with(described_class::UTF8_BOM)
     end
 
+    # Forms some forks' version files use, which main's reader accepted.
+    {
+      'an assignment split across lines'            => "LICH_VERSION =\n  '5.21.0'\n",
+      'a qualified constant'                        => "::LICH_VERSION = '5.21.0'\n",
+      'a split assignment behind a byte-order mark' => "#{described_class::UTF8_BOM}LICH_VERSION =\n  '5.21.0'\n".b
+    }.each do |form, content|
+      it "reverts a snapshot main wrote with #{form}" do
+        install('5.22.0')
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        File.binwrite(File.join(dir, 'lib', 'version.rb'), content)
+        allow(Lich::Util::Update).to receive(:clear_branch_tracking)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.binread(File.join(LIB_DIR, 'version.rb'))).to eq(content)
+        expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
+      end
+    end
+
+    it 'prefers an assignment at the start of a line to an earlier comment that mentions one' do
+      expect(version_of("# was LICH_VERSION = '1.0.0'\nLICH_VERSION = '5.25.0'\n")).to eq('5.25.0')
+    end
+
     it 'reads an indented assignment, as in a module body' do
       expect(version_of("module Lich\n  LICH_VERSION = '5.25.0'\nend\n")).to eq('5.25.0')
     end

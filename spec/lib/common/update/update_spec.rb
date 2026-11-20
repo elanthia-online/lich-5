@@ -561,13 +561,15 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
   # The version is read without running the file, stored, and compared with
   # Gem::Version at login; store_branch_tracking reads the file as text.
   {
-    'a computed version'                => "LICH_VERSION = [6, 0, 0].join('.')\n",
-    'an interpolated version'           => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
-    'a v prefix'                        => "LICH_VERSION = 'v6.0.0'\n",
-    'build metadata'                    => "LICH_VERSION = '6.0.0-alpha+x'\n",
-    'a valid version only in a comment' => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
-    'two assignments'                   => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
-    'a byte that is not UTF-8'          => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
+    'a computed version'                    => "LICH_VERSION = [6, 0, 0].join('.')\n",
+    'an interpolated version'               => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
+    'a v prefix'                            => "LICH_VERSION = 'v6.0.0'\n",
+    'build metadata'                        => "LICH_VERSION = '6.0.0-alpha+x'\n",
+    'a valid version only in a comment'     => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
+    'two assignments'                       => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
+    'a valid prefix with a suffix appended' => "LICH_VERSION = '6.0.0' + '-x+y'\n",
+    'a valid prefix with a method call'     => "LICH_VERSION = '6.0.0'.succ\n",
+    'a byte that is not UTF-8'              => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
   }.each do |shape, content|
     it "refuses a lib/version.rb with #{shape} before installing" do
       lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
@@ -582,9 +584,11 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
   end
 
   {
-    '6.0.0'                          => "LICH_VERSION = '6.0.0'\n",
-    '5.13.0-beta.2'                  => "LICH_VERSION = '5.13.0-beta.2'\n",
-    '6.0.0 behind a byte-order mark' => "#{Lich::Util::Update::SnapshotManager::UTF8_BOM}LICH_VERSION = '6.0.0'\n".b
+    '6.0.0'                           => "LICH_VERSION = '6.0.0'\n",
+    '5.13.0-beta.2'                   => "LICH_VERSION = '5.13.0-beta.2'\n",
+    '6.0.0 frozen, with a comment'    => "LICH_VERSION = '6.0.0'.freeze # release 6\n",
+    '6.0.0 with Windows line endings' => "# frozen_string_literal: true\r\nLICH_VERSION = \"6.0.0\"\r\n",
+    '6.0.0 behind a byte-order mark'  => "#{Lich::Util::Update::SnapshotManager::UTF8_BOM}LICH_VERSION = '6.0.0'\n".b
   }.each do |label, content|
     version = label.split.first
     it "installs a lib/version.rb declaring #{label}" do

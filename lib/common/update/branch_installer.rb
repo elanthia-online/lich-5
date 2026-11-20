@@ -33,6 +33,10 @@ module Lich
         OWNER_PATTERN = /\A[A-Za-z0-9-]+\z/.freeze
         # GitHub owner and repository name characters.
         REPO_SPEC_PATTERN = %r{\A(?<owner>[A-Za-z0-9-]+)/(?<repo>[A-Za-z0-9._-]+)\z}.freeze
+        # A LICH_VERSION assignment whose whole value is one quoted literal:
+        # nothing may follow the closing quote but .freeze and a comment, so
+        # the value read is the value Lich runs (not '6.0.0' + suffix).
+        COMPLETE_VERSION_ASSIGNMENT = /^[ \t]*LICH_VERSION[ \t]*=[ \t]*(['"])([^'"\r\n]+)\1(?:\.freeze)?[ \t]*(?:#[^\r\n]*)?\r?$/.freeze
 
         # @param snapshot_manager [SnapshotManager] snapshot management instance
         # @param release_installer [ReleaseInstaller] installer for performing updates
@@ -99,12 +103,15 @@ module Lich
                 # compared with Gem::Version at login, which raises on one
                 # like 'v6.0.0', and store_branch_tracking reads the file as
                 # text, which fails part way through the install unless it is
-                # valid UTF-8. Exactly one assignment is accepted, so the one
-                # read is the one Lich runs.
+                # valid UTF-8. Exactly one assignment is accepted, and its
+                # whole value must be the literal, so the one read is the one
+                # Lich runs.
                 content = File.binread(version_file_path)
                 utf8 = content.dup.force_encoding(Encoding::UTF_8).valid_encoding?
                 single = SnapshotManager.version_assignments(content).size == 1
-                unless utf8 && single && version && Gem::Version.correct?(version)
+                complete = SnapshotManager.without_bom(content).scan(COMPLETE_VERSION_ASSIGNMENT).map(&:last)
+                literal = complete.size == 1 && complete.first == version
+                unless utf8 && single && literal && version && Gem::Version.correct?(version)
                   raise StandardError, "Downloaded branch's lib/version.rb must be UTF-8 and assign LICH_VERSION once, a version number in quotes (e.g. '6.0.0'), which this updater needs to install and revert it"
                 end
 
