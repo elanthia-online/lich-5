@@ -53,9 +53,19 @@ jobs:
             const { data: repoData } = await github.rest.repos.get({ owner, repo });
             const defaultBranch = repoData.default_branch || 'main';
 
+            // getReleaseByTag sees published releases only. A draft (every new
+            // beta) is found by listing releases and matching its tag.
             async function byTag(tag) {
-              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
-              return data;
+              try {
+                const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                return data;
+              } catch (e) {
+                if (e.status !== 404) throw e;
+                const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });
+                const hit = (data || []).find(r => r.tag_name === tag);
+                if (!hit) throw e;
+                return hit;
+              }
             }
             async function latestStable(includeDraft = false) {
               const { data } = await github.rest.repos.listReleases({ owner, repo, per_page: 100 });

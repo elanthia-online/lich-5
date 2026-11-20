@@ -5,7 +5,8 @@
 #
 # The main fixture is a stack: three PRs where each head contains the layers
 # below it. Squashing the layers in order onto the base they share must leave
-# the tree of the top layer.
+# the tree of the top layer. Union updates of an already-curated PR, which are
+# squashed with theirs, are covered at the end.
 # =============================================================================
 
 set -euo pipefail
@@ -32,6 +33,15 @@ LOG_FILE="${WORK_DIR}/curate.log"
 
 # shellcheck source=.github/scripts/curate-pre-branch.sh
 source "$CURATE_SCRIPT"
+
+# The GitHub API, stubbed: every PR is open and titled after its number.
+stub_api() {
+  fetch_pr() { echo "$2"; }
+  pr_title() { echo "feat(all): change $1"; }
+  pr_merge_sha() { echo null; }
+  pr_is_merged() { return 1; }
+}
+stub_api
 
 echo "Testing curate with conflict_strategy=theirs..."
 echo
@@ -129,6 +139,42 @@ sync_base() {
   prepare_branch
 }
 
+# Clone the origin, check out an existing destination and curate PRs into it
+# the way process_prs does.
+# Args: $1 = clone path, $2 = conflict strategy, $3 = destination, $4... = PR numbers
+recurate() {
+  local clone="$1" pr
+  STRAT_SAFE="$2"
+  DEST_SAFE="$3"
+  MODE_SAFE=head
+  SQUASH_SAFE=true
+  GITHUB_REPOSITORY=test/test
+  shift 3
+
+  git clone -q "$ORIGIN" "$clone"
+  cd "$clone"
+  setup_conflict_strategy
+  git checkout -q "$DEST_SAFE"
+  for pr in "$@"; do
+    process_single_pr "$pr"
+  done
+}
+
+# Clone the origin and run the whole curate from the scripts in that clone, as
+# the workflow runs them from its checkout. Nothing is pushed.
+# Args: $1 = clone path, $2 = conflict strategy, $3 = destination, $4 = PR list
+curate_from_checkout() {
+  git clone -q "$ORIGIN" "$1"
+  cd "$1"
+  # shellcheck source=.github/scripts/curate-pre-branch.sh
+  source .github/scripts/curate-pre-branch.sh
+  stub_api
+  export RUNNER_TEMP="$WORK_DIR" DESTINATION="$3" BASE=main PRS="$4" MODE=head \
+    SQUASH=true CONFLICT_STRATEGY="$2" RESET_DESTINATION=false DRY_RUN=true \
+    GITHUB_TOKEN=unused GITHUB_REPOSITORY=test/test
+  main
+}
+
 # Run a curate function in a subshell, as a script run would, and record its
 # exit status in RUN_STATUS. Must not be called from a condition, or the
 # subshell would ignore errexit.
@@ -162,6 +208,9 @@ put shared.txt "first line" "setting = base" "last line"
 put lib/legacy_a.rb "class LegacyA" "  def call" "    :a" "  end" "end"
 put lib/legacy_b.rb "module LegacyB" "  VALUE = :b" "end"
 put lib/dropped.rb "DROPPED = %w[one two three].freeze"
+# The curate scripts under test, so a run can start from a checkout's copy.
+mkdir -p "${SEED}/.github"
+cp -R "${TEST_DIR}/../scripts" "${SEED}/.github/scripts"
 commit_all "chore(all): base"
 git -C "$SEED" push -q origin main
 
@@ -213,6 +262,25 @@ branch_from sync-base main
 git -C "$SEED" rm -q lib/legacy_a.rb
 commit_all "feat(all): base deletion"
 git -C "$SEED" push -q origin sync-base
+
+# A destination that already holds PR 21's first version, which edits a file.
+# PR 21's second version deletes that file.
+branch_from pre/beta/update main
+put lib/legacy_a.rb "class LegacyA" "  def call" "    :a_from_pr_21_v1" "  end" "end"
+commit_all "feat(all): change 21 (#21)"
+git -C "$SEED" push -q origin pre/beta/update
+
+branch_from pr21_v2 main
+git -C "$SEED" rm -q lib/legacy_a.rb
+commit_all "feat(all): change 21, second version"
+publish_pr pr21_v2 21
+
+# PR 32 changes a curate script so that sourcing it leaves a marker file.
+MARKER="${WORK_DIR}/curated-script-ran"
+branch_from pr32 main
+printf 'touch %q\n' "$MARKER" >> "${SEED}/.github/scripts/strategies/conflict/theirs.sh"
+commit_all "feat(all): change 32"
+publish_pr pr32 32
 
 # -----------------------------------------------------------------------------
 # theirs: a stack is squashed layer by layer
@@ -286,6 +354,33 @@ else
 fi
 assert_equals "$(git -C "$SEED" rev-parse pre/beta/sync)" "$(git -C "$sync" rev-parse pre/beta/sync)" \
   "theirs: a stopped base sync leaves the destination where it was"
+
+# -----------------------------------------------------------------------------
+# union: an update of an already-curated PR is squashed with theirs
+# -----------------------------------------------------------------------------
+
+update="${WORK_DIR}/update"
+run recurate "$update" union pre/beta/update 21
+if [[ $RUN_STATUS -eq 0 ]]; then
+  pass "union update: a PR's new version that deletes a file it edited does not stop the curate"
+  if git -C "$update" cat-file -e HEAD:lib/legacy_a.rb 2>/dev/null; then
+    fail "union update: the file the new version deletes is removed"
+  else
+    pass "union update: the file the new version deletes is removed"
+  fi
+else
+  fail "union update: a PR's new version that deletes a file it edited does not stop the curate" \
+    "Exit status: $RUN_STATUS"
+fi
+
+# PR 32 changes theirs.sh, and the update of PR 21 sources it afterwards.
+run curate_from_checkout "${WORK_DIR}/checkout" union pre/beta/update 32,21
+assert_equals "0" "$RUN_STATUS" "union update: a curate run from a checkout completes"
+if [[ -e "$MARKER" ]]; then
+  fail "union update: a curated PR's change to a curate script does not run"
+else
+  pass "union update: a curated PR's change to a curate script does not run"
+fi
 
 echo
 echo "Tests passed: $TESTS_PASSED/$TESTS_RUN"

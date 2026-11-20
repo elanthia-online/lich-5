@@ -28,6 +28,18 @@ source "${SCRIPT_DIR}/lib/github-api.sh"
 # shellcheck source=.github/scripts/lib/validation.sh
 source "${SCRIPT_DIR}/lib/validation.sh"
 
+# Curating rewrites the working tree, these scripts included, while the push
+# token is in reach. Copy the scripts out of the tree before the first
+# checkout and source every later script from the copy, so a curated PR's
+# version of a script never runs here. Trade-off: a PR that changes these
+# scripts takes effect only once it is on main.
+use_scripts_copy() {
+  local copy
+  copy="$(mktemp -d "${RUNNER_TEMP:-/tmp}/curate-scripts.XXXXXX")"
+  cp -R "${SCRIPT_DIR}/." "$copy"
+  SCRIPT_DIR="$copy"
+}
+
 # ===========================================================================
 # VALIDATION
 # ===========================================================================
@@ -380,6 +392,9 @@ handle_merge_conflict() {
     check_union_merge_has_changes "merge"
   elif [[ "$GIT_STRATEGY_FLAG" == "-X theirs" ]] && resolve_modify_delete_theirs; then
     # Only modify/delete conflicts were left, and each went to the PR's side.
+    # This also covers, on purpose, an update of an already-curated PR under
+    # union: process_single_pr squashes it with -X theirs, so the PR's latest
+    # version wins its modify/delete conflicts too.
     log_warn "Resolved modify/delete conflicts for $context in favor of the PR"
   else
     merge_abort
@@ -413,13 +428,6 @@ validate_syntax() {
   # shellcheck source=.github/scripts/strategies/syntax/json.sh
   source "${SCRIPT_DIR}/strategies/syntax/json.sh"
   validate_json_syntax || exit_code=$?
-
-  # Run Rubocop only when union merge was used
-  if [[ "$USE_UNION" == "true" ]]; then
-    # shellcheck source=.github/scripts/strategies/syntax/rubocop.sh
-    source "${SCRIPT_DIR}/strategies/syntax/rubocop.sh"
-    validate_rubocop || exit_code=$?
-  fi
 
   log_endgroup
 
@@ -492,6 +500,7 @@ generate_report() {
 main() {
   log_info "Starting pre-branch curation"
 
+  use_scripts_copy
   validate_inputs
   setup_conflict_strategy
   prepare_branch

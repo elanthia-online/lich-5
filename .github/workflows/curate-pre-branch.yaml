@@ -72,8 +72,6 @@ concurrency:
 jobs:
   curate:
     runs-on: ubuntu-latest
-    env:
-      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     steps:
       # Curated PRs can change workflow files, and the built-in token is never
       # allowed to push those. Mint a token from the org GitHub App that is. The
@@ -96,10 +94,13 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
+      # Ruby only for the parse-only syntax checks. No bundler: this job must
+      # not load a curated PR's Gemfile or rubocop configuration while the App
+      # token is in reach.
       - name: Setup Ruby
         uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
-          bundler-cache: true
+          bundler: none
 
       - name: Install dependencies with pkg cache
         run: sudo apt-get update -y
