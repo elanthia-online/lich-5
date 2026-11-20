@@ -3,6 +3,9 @@
 require_relative 'update_spec_helper'
 
 RSpec.describe Lich::Util::Update::FileUpdater do
+  # Every script install reads the script's Lich version floor.
+  include_context 'with the real script floor reader'
+
   let(:tmpdir) { Dir.mktmpdir('fu-test') }
   let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
   let(:resolver) { instance_double(Lich::Util::Update::ChannelResolver) }
@@ -189,6 +192,218 @@ RSpec.describe Lich::Util::Update::FileUpdater do
 
       expect(printed.last).to include('foo.lic was not updated.', 'temporary error')
       expect(printed.last).not_to include('not found')
+    end
+  end
+
+  describe 'a script whose newest version needs a newer Lich' do
+    let(:printed) { [] }
+    let(:shas) { %w[a b c].map { |letter| letter * 40 } }
+    let(:newest) { script_requiring('5.26.0', 'v3') }
+    let(:compatible) { script_requiring('5.25.0', 'v2') }
+    let(:history) { [newest, compatible, script_requiring('5.24.0', 'v1')] }
+    let(:live_path) { File.join(tmpdir, 'foo.lic') }
+
+    before do
+      stub_const('LICH_VERSION', '5.25.1')
+      allow(updater).to receive(:respond) { |msg = ''| printed << msg }
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+      allow(client).to receive(:last_error).and_return(nil)
+    end
+
+    # Stubs the newest version on the branch, the commit list for the file
+    # and the file as it was at each commit, in +repo+.
+    def stub_repo(repo, branch, path)
+      raw = "https://raw.githubusercontent.com/#{repo}"
+      commits_url = "https://api.github.com/repos/#{repo}/commits?sha=#{branch}&path=#{path.gsub('/', '%2F')}&per_page=30"
+      allow(client).to receive(:http_get).with("#{raw}/#{branch}/#{path}", auth: false) { newest }
+      allow(client).to receive(:fetch_github_json).with(commits_url) { history.each_index.map { |index| { 'sha' => shas[index] } } }
+      shas.each_with_index do |sha, index|
+        allow(client).to receive(:http_get).with("#{raw}/#{sha}/#{path}", auth: false) { history[index] }
+      end
+      commits_url
+    end
+
+    describe '#update_file (--script=name)' do
+      let!(:commits_url) { stub_repo('elanthia-online/scripts', 'master', 'scripts/foo.lic') }
+
+      it 'installs the newest version the running Lich can run instead' do
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(printed).to include(
+          '[lich5-update: The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1. ' \
+          'Installing the newest version this Lich can run instead (commit bbbbbbb).]',
+          'foo.lic has been updated.'
+        )
+      end
+
+      it 'never writes the version with the unmet floor, even over nothing' do
+        written = []
+        allow(Lich::Util::Update::FileWriter).to receive(:safe_write) { |_path, content| written << content }
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(written).to eq([compatible])
+      end
+
+      it 'refuses, and leaves the installed copy alone, when no version in the history can run here' do
+        history.replace([newest, script_requiring('5.26.0', 'v2')])
+        File.binwrite(live_path, "# mine\n")
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq("# mine\n")
+        expect(printed).to eq(
+          ['[lich5-update: The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1. No older version that runs on ' \
+           'this Lich was found (2 checked), so foo.lic was not updated. Update Lich to use it.]']
+        )
+      end
+
+      it 'says a missing script was not installed when no version can run here' do
+        history.replace([newest])
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(printed.last).to include('so foo.lic was not installed. Update Lich to use it.')
+      end
+
+      it 'says so, without rewriting the file, when the installed copy already is that version' do
+        File.binwrite(live_path, compatible)
+        allow(Lich::Util::Update::FileWriter).to receive(:safe_write)
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(Lich::Util::Update::FileWriter).not_to have_received(:safe_write)
+        expect(printed).to eq(
+          ['[lich5-update: The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1. ' \
+           'foo.lic is already at the newest version this Lich can run.]']
+        )
+      end
+
+      it 'installs nothing and reports the GitHub failure when the history cannot be read' do
+        allow(client).to receive(:fetch_github_json).with(commits_url).and_return(nil)
+        allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :rate_limited, status: 403))
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(printed).to eq(
+          ['[lich5-update: GitHub check failed (rate limit reached). The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1, ' \
+           'and its older versions could not be checked, so foo.lic was not installed. Run the command again once the limit resets.]']
+        )
+      end
+
+      it 'says an installed script was not updated when the history cannot be read' do
+        File.binwrite(live_path, "# mine\n")
+        allow(client).to receive(:fetch_github_json).with(commits_url).and_return(nil)
+        allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :rate_limited, status: 403))
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq("# mine\n")
+        expect(printed.last).to include('could not be checked, so foo.lic was not updated.')
+      end
+
+      it 'installs the newest version as before when the running Lich meets its floor' do
+        stub_const('LICH_VERSION', '5.26.0')
+
+        updater.update_file('script', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq(newest)
+        expect(client).not_to have_received(:fetch_github_json)
+      end
+
+      it 'reads the history of dependency.lic from the repository it is downloaded from' do
+        stub_repo('elanthia-online/dr-scripts', 'main', 'dependency.lic')
+
+        updater.update_file('script', 'dependency.lic')
+
+        expect(File.binread(File.join(tmpdir, 'dependency.lic'))).to eq(compatible)
+      end
+
+      it 'does not read a floor from a data file' do
+        stub_const('DATA_DIR', tmpdir)
+        allow(client).to receive(:http_get).and_return(newest)
+
+        updater.update_file('data', 'effect-list.xml')
+
+        expect(File.binread(File.join(tmpdir, 'effect-list.xml'))).to eq(newest)
+      end
+    end
+
+    describe '#update_file_from_repo (--script=repo:name)' do
+      let(:tree) { { 'tree' => [{ 'path' => 'scripts/foo.lic', 'type' => 'blob', 'sha' => git_blob_sha(newest) }] } }
+      let!(:commits_url) { stub_repo('elanthia-online/scripts', 'master', 'scripts/foo.lic') }
+
+      before do
+        allow(client).to receive(:fetch_github_json)
+          .with(Lich::Util::Update::SCRIPT_REPOS['scripts'][:api_url]).and_return(tree)
+      end
+
+      it 'installs the newest version the running Lich can run instead' do
+        updater.update_file_from_repo('script', 'scripts', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(printed.first).to include('needs Lich 5.26.0+ and this is Lich 5.25.1. Installing the newest version this Lich can run instead')
+        expect(printed.last).to eq('[lich5-update: foo.lic has been updated from Core Scripts.]')
+      end
+
+      it 'replaces an installed copy of the newest version instead of calling it up to date' do
+        File.binwrite(live_path, newest)
+
+        updater.update_file_from_repo('script', 'scripts', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq(compatible)
+        expect(printed.grep(/already up to date/)).to be_empty
+        expect(client).not_to have_received(:http_get).with('https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/foo.lic', auth: false)
+      end
+
+      it 'still calls an installed copy of the newest version up to date when the running Lich can run it' do
+        stub_const('LICH_VERSION', '5.26.0')
+        File.binwrite(live_path, newest)
+
+        updater.update_file_from_repo('script', 'scripts', 'foo.lic')
+
+        expect(printed).to eq(['[lich5-update: foo.lic is already up to date.]'])
+      end
+
+      it 'refuses when no version in the history can run here' do
+        history.replace([newest])
+
+        updater.update_file_from_repo('script', 'scripts', 'foo.lic')
+
+        expect(File.exist?(live_path)).to be(false)
+        expect(printed.last).to include('No older version that runs on this Lich was found (1 checked), so foo.lic was not installed.')
+        expect(printed.grep(/has been updated/)).to be_empty
+      end
+
+      it 'holds a repo that the login sync does not floor-check to the same rule' do
+        stub_repo('elanthia-online/dr-scripts', 'main', 'foo.lic')
+        allow(client).to receive(:fetch_github_json)
+          .with(Lich::Util::Update::SCRIPT_REPOS['dr-scripts'][:api_url])
+          .and_return({ 'tree' => [{ 'path' => 'foo.lic', 'type' => 'blob', 'sha' => git_blob_sha(newest) }] })
+
+        updater.update_file_from_repo('script', 'dr-scripts', 'foo.lic')
+
+        expect(File.binread(live_path)).to eq(compatible)
+      end
+
+      it 'installs nothing from a custom repo, whose history is not searched' do
+        allow(Lich::Util::Update::CustomRepos).to receive(:all).and_return({ 'me/repo' => { 'branch' => 'dev' } })
+        commits_url = stub_repo('me/repo', 'dev', 'foo.lic')
+        allow(client).to receive(:fetch_github_json)
+          .with('https://api.github.com/repos/me/repo/git/trees/dev?recursive=1')
+          .and_return({ 'tree' => [{ 'path' => 'foo.lic', 'type' => 'blob', 'sha' => git_blob_sha(newest) }] })
+
+        updater.update_file_from_repo('script', 'me/repo', 'foo.lic')
+
+        expect(File.exist?(File.join(tmpdir, 'custom', 'me-repo', 'foo.lic'))).to be(false)
+        expect(client).not_to have_received(:fetch_github_json).with(commits_url)
+        expect(printed).to eq(
+          ['[lich5-update: The newest foo.lic needs Lich 5.26.0+ and this is Lich 5.25.1, so foo.lic was not installed. Update Lich to use it.]']
+        )
+      end
     end
   end
 

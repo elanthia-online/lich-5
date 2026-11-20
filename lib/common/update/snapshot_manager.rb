@@ -4,9 +4,9 @@
   Snapshot and rollback functionality for Lich core files.
 
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
-  updates. Supports rollback to most recent snapshot. #snapshot, #revert
-  and #restore_from describe how each leaves the installation as it was when
-  it fails.
+  updates. Supports rollback to the most recent snapshot of a stable
+  release. #snapshot, #revert and #restore_from describe how each leaves the
+  installation as it was when it fails.
 
   A revert whose thread is killed (Lich shutting down) undoes the swap like
   a failed one. A revert whose process is killed during the swap cannot
@@ -188,15 +188,24 @@ module Lich
           raise RevertRunningError, 'another update, snapshot or revert is running on this installation'
         end
 
-        # Restores most recent snapshot from BACKUP_DIR.
+        # Restores the most recent snapshot of a stable release from
+        # BACKUP_DIR.
+        #
+        # Every update takes a snapshot of the version it replaces, so after
+        # one prerelease is updated to the next, the newest snapshot holds a
+        # prerelease. Those are passed over (see #prerelease_snapshot?): a
+        # revert goes back to the last stable release that was installed,
+        # however many prereleases were installed since. With snapshots of
+        # prereleases only, it says so and changes nothing.
         #
         # Refuses, without changing anything, when the newest L5-snapshot-*
-        # directory is incomplete (no lib/version.rb declaring LICH_VERSION,
-        # no lich.rbw, no scripts/, or, in one an older Lich took, core
-        # scripts that may have been cut off part way). It names every
-        # incomplete directory newer than the next complete snapshot, and
-        # that snapshot if there is one, but never falls back to it on its
-        # own: an older snapshot may be several versions back.
+        # directory left to consider is incomplete (no lib/version.rb
+        # declaring LICH_VERSION, no lich.rbw, no scripts/, or, in one an
+        # older Lich took, core scripts that may have been cut off part
+        # way). It names every incomplete directory newer than the next
+        # complete snapshot, and that snapshot if there is one, but never
+        # falls back to it on its own: an older snapshot may be several
+        # versions back.
         #
         # Holds the revert lock exclusively for the whole run. If another
         # revert, a snapshot, or an update past its snapshot (see #snapshot)
@@ -205,7 +214,7 @@ module Lich
         # @return [void]
         def revert
           respond
-          respond 'Reverting Lich5 to previously installed version.'
+          respond 'Reverting Lich5 to the last installed stable release.'
 
           ran = with_revert_lock(File::LOCK_EX) do
             revert_newest_snapshot
@@ -261,17 +270,37 @@ module Lich
 
         # The body of #revert, run while holding the revert lock.
         #
+        # Snapshots of prerelease versions are set aside first; the checks
+        # and the restore then apply to the newest of the rest, which is a
+        # stable release or, if it is incomplete, of unknown version.
+        #
         # @return [void]
+        # @api private
         def revert_newest_snapshot
-          candidates = snapshot_dirs
-          restore_snapshot = candidates.first
-          if restore_snapshot.nil?
+          snapshots = snapshot_dirs
+          if snapshots.empty?
             respond "No prior Lich5 version found. Seek assistance."
             return
           end
 
+          prereleases, candidates = snapshots.partition { |dir| prerelease_snapshot?(dir) }
+          restore_snapshot = candidates.first
+          if restore_snapshot.nil?
+            respond
+            respond 'No snapshot of a stable Lich5 release was found, so nothing was changed.'
+            respond "The snapshots in #{BACKUP_DIR} are all of prerelease versions (#{snapshot_versions(prereleases)})."
+            respond 'Seek assistance.'
+            return
+          end
+
+          newer_prereleases = prereleases.select { |dir| File.basename(dir) > File.basename(restore_snapshot) }
+          unless newer_prereleases.empty?
+            respond "Passing over #{newer_prereleases.size == 1 ? 'a newer snapshot' : "#{newer_prereleases.size} newer snapshots"} " \
+                    "of prerelease versions (#{snapshot_versions(newer_prereleases)})."
+          end
+
           unless snapshot_problems(restore_snapshot).empty?
-            refuse_incomplete(candidates)
+            refuse_incomplete(candidates, prereleases: prereleases)
             return
           end
 
@@ -613,16 +642,45 @@ module Lich
           nil
         end
 
+        # Whether a snapshot holds a prerelease of Lich (5.26.0-beta.1), going
+        # by the LICH_VERSION its own lib/version.rb declares, read as text.
+        # A declared version that is not a version number is not a stable
+        # release either. A snapshot that declares none (an incomplete one)
+        # is not counted as a prerelease, so #revert still refuses on it
+        # instead of silently reaching past it.
+        #
+        # @param dir [String] snapshot directory
+        # @return [Boolean]
+        # @api private
+        def prerelease_snapshot?(dir)
+          version = snapshot_version(dir)
+          return false if version.nil?
+
+          Gem::Version.new(version).prerelease?
+        rescue ArgumentError
+          true
+        end
+
+        # @param dirs [Array<String>] snapshot directories, newest first
+        # @return [String] their distinct Lich versions, newest snapshot first
+        # @api private
+        def snapshot_versions(dirs)
+          dirs.map { |dir| snapshot_version(dir) }.uniq.join(', ')
+        end
+
         # Explains why #revert will not restore the newest snapshot and what
         # to do next. Every incomplete snapshot newer than the next complete
         # one is listed, because the revert keeps refusing until all of them
         # are out of the way (older Lich versions left one per failed
         # snapshot attempt).
         #
-        # @param candidates [Array<String>] all snapshots, newest first; the
-        #   first is incomplete
+        # @param candidates [Array<String>] the snapshots that are not of a
+        #   prerelease, newest first; the first is incomplete
+        # @param prereleases [Array<String>] the snapshots of prerelease
+        #   versions; when any is newer than the last incomplete snapshot
+        #   listed, the incomplete ones are not the newest of all
         # @return [void]
-        def refuse_incomplete(candidates)
+        def refuse_incomplete(candidates, prereleases: [])
           incomplete = []
           fallback = nil
           candidates.each do |path|
@@ -634,11 +692,16 @@ module Lich
             incomplete << [path, problems]
           end
 
+          oldest_listed = File.basename(incomplete.last.first)
+          after_prereleases = prereleases.any? { |dir| File.basename(dir) > oldest_listed }
+
           respond
           if incomplete.size == 1
-            respond 'The newest snapshot is incomplete, so nothing was changed:'
+            which = after_prereleases ? 'newest snapshot that is not of a prerelease' : 'newest snapshot'
+            respond "The #{which} is incomplete, so nothing was changed:"
           else
-            respond "The #{incomplete.size} newest snapshots are incomplete, so nothing was changed:"
+            which = after_prereleases ? 'newest snapshots that are not of a prerelease' : 'newest snapshots'
+            respond "The #{incomplete.size} #{which} are incomplete, so nothing was changed:"
           end
           incomplete.each do |path, problems|
             respond "    #{path}"
