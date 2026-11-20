@@ -10,6 +10,7 @@ require "common/sharedbuffer"
 require "common/buffer"
 require "games"
 require "gemstone/overwatch"
+require "gemstone/group"
 require "gemstone/infomon"
 require "attributes/stats"
 require "attributes/resources"
@@ -1276,6 +1277,51 @@ RSpec.describe Lich::Gemstone::Infomon::XMLParser, ".parse" do
       wraith.status = "gone"
       expect(Lich::Gemstone::Infomon::XMLParser.parse(%[The <pushBold/><a exist="1283966" noun="wraith">wraith</a><popBold/> falls to the ground motionless.])).to eq(:ok)
       expect(wraith.status).to eq("gone")
+    end
+  end
+
+  # Group_Short is a loose prefilter: any "group" substring trips it, including
+  # one inside a player's name. A line it trips that the Group observer does not
+  # want must still reach the later branches instead of returning :noop.
+  context "a player name containing 'group'" do
+    let(:parser) { Lich::Gemstone::Infomon::XMLParser }
+    let(:plunderer_attacks) do
+      lambda do |name|
+        '<pushBold/>A <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> explodes from the shadows!  ' \
+          '<pushBold/><a exist="57655053" noun="plunderer">His</a><popBold/> shining eyes agleam with cunning, ' \
+          '<pushBold/>a <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> lashes out at ' \
+          "<a exist=\"-1234567\" noun=\"#{name}\">#{name}</a> with <pushBold/><a exist=\"57655053\" noun=\"plunderer\">his</a><popBold/> " \
+          '<a exist="57655057" noun="poignard">rainbow glaes poignard</a>!'
+      end
+    end
+
+    before do
+      allow(Lich::Gemstone::Overwatch).to receive(:respond)
+      allow(GameObj).to receive(:npcs).and_return([])
+    end
+
+    %w[Examplechar Agroupa].each do |name|
+      it "still lets Overwatch add the attacker when the victim is #{name}" do
+        expect(GameObj).to receive(:new_npc).with("57655053", "plunderer", "masked goliath plunderer")
+        expect(parser.parse(plunderer_attacks.call(name))).to eq(:ok)
+        expect(XMLData.current_target_ids).to eq(["57655053"])
+      end
+    end
+
+    it "still lets Also here: record a player whose name contains 'group'" do
+      stub_const("Lich::Claim::Lock", Mutex.new.tap(&:lock))
+      allow(XMLData).to receive(:arrival_pcs).and_return(arrivals = [])
+      expect(parser.parse(%(Also here: <a exist="-1234567" noun="Agroupa">Agroupa</a>.))).to eq(:ok)
+      expect(arrivals).to eq(["Agroupa"])
+    end
+
+    it "still hands a genuine group line to the Group observer" do
+      line = %(<a exist="-1234567" noun="Examplechar">Examplechar</a> joins your group.)
+      match_data = Lich::Gemstone::Group::Observer.wants?(line)
+      expect(match_data).to be_truthy
+      expect(Lich::Gemstone::Group::Observer).to receive(:consume).with(line, anything)
+      expect(Lich::Gemstone::Overwatch::Observer).not_to receive(:consume)
+      expect(parser.parse(line)).to eq(:ok)
     end
   end
 end

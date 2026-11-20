@@ -160,7 +160,8 @@ module Lich
           REVEALED_FLAMING_AURA = /The flaming aura surrounding you lashes out at <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who is forced into view!/
           # Order of Voln Symbol of Sleep reveals hidden creatures before putting them to sleep
           REVEALED_VOLN_SLEEP = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed by the pattern!/
-          REVEALED_EXPLODES = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> explodes from the shadows!  <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> shining eyes agleam with cunning, <pushBold\/>\w+ <a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> lashes out at you with <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a>\!/
+          # Ascension onslaught plunderer; matches both the 1st-person (you) and 3rd-person (another player) views
+          REVEALED_EXPLODES = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> explodes from the shadows!  <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> shining eyes agleam with cunning, <pushBold\/>\w+ <a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> lashes out at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with <pushBold\/><a exist="\d+" noun="[^"]+">[^<]+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a>\!/
 
           # Animal companion reveals
           REVEALED_AC_CAT = /<pushBold\/>\w+ <a exist="\d+" noun="\w+">[^<]+<\/a><popBold\/> leaps suddenly forward, uncovering <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who was hidden\!/
@@ -176,8 +177,9 @@ module Lich
 
           # Silent strike patterns - attacks that may result in immediate rehiding
           SILENT_CUTTHROAT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and attempts to grasp you by the chin while bringing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a> up to slit your throat\!/
-          SILENT_CANNIBAL_SWING = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and hurtles at you, swinging wildly with a <a exist="\d+" noun="[^"]+">[^<]+<\/a>!/
-          SILENT_CANNIBAL_GRAPPLE = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and throws <pushBold\/><a exist="\d+" noun="[^"]+">(?:his|her)<\/a><popBold\/> wiry arms around you, fueled by panicked hunger!/
+          # Bloody halfling cannibal; both match the 1st-person (you) and 3rd-person (another player) views
+          SILENT_CANNIBAL_SWING = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and hurtles at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>), swinging wildly with a <a exist="\d+" noun="[^"]+">[^<]+<\/a>!/
+          SILENT_CANNIBAL_GRAPPLE = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and throws <pushBold\/><a exist="\d+" noun="[^"]+">(?:his|her)<\/a><popBold\/> wiry arms around (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>), fueled by panicked hunger!/
           SILENT_LEAP_ATTACK = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from hiding to attack\!/
           SILENT_SUBDUE = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and aims a blow to your head\!/
           SILENT_STALKER_SAVAGE = /Catching you unaware, <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> carves into you with cruel and ruthless savagery\!/
