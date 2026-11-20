@@ -93,11 +93,16 @@ module Lich
 
                 version = @release_installer.extract_version_from_file(version_file_path)
                 # #revert reads a snapshot's version the same way, without
-                # running it, and refuses one it cannot read. Falling back to
-                # the current version here would install a tree whose next
-                # snapshot cannot be reverted.
-                if version.nil?
-                  raise StandardError, "Downloaded branch's lib/version.rb does not assign LICH_VERSION a string literal, which this updater needs to revert it"
+                # running it, and refuses one it cannot read, so falling back
+                # to the current version would install a tree whose next
+                # snapshot cannot be reverted. The version is also stored and
+                # compared with Gem::Version at login, which raises on one
+                # like 'v6.0.0', and store_branch_tracking reads the file as
+                # text, which fails part way through the install unless it is
+                # valid UTF-8.
+                utf8 = File.binread(version_file_path).force_encoding(Encoding::UTF_8).valid_encoding?
+                unless utf8 && version && Gem::Version.correct?(version)
+                  raise StandardError, "Downloaded branch's lib/version.rb must be UTF-8 and assign LICH_VERSION a version number in quotes (e.g. '6.0.0'), which this updater needs to install and revert it"
                 end
 
                 respond
@@ -115,13 +120,7 @@ module Lich
               respond "Branch tracking: This installation is now tracking branch '#{branch_name}'"
               respond "                 from repository '#{repo}'" unless repo.casecmp?(GITHUB_REPO)
               respond
-              respond "Your previous installation is saved in: #{snapshot_dir}"
-              respond "After you log back in, --revert runs the version you just installed, and it may"
-              respond "not put back Gemfile, Gemfile.lock and LICENSE. If it does not, or the new"
-              respond "version will not start, copy from that folder its lib/, #{File.basename($PROGRAM_NAME)}, the"
-              respond "scripts in its scripts/ and any Gemfile, Gemfile.lock and LICENSE it has into:"
-              respond "    #{LICH_DIR}"
-              respond "Delete a Gemfile.lock there if the saved folder has none."
+              respond_recovery_steps(snapshot_dir)
               respond
               respond "You should exit the game, then log back in to use the updated version."
               respond
@@ -143,7 +142,7 @@ module Lich
               respond "Error during branch update: #{e.message}"
               if installing
                 respond "The update failed after it had started replacing your installation."
-                respond "Run '#{$clean_lich_char}lich5-update --revert' to restore the snapshot taken before it."
+                respond_recovery_steps(snapshot_dir)
               else
                 respond "Your installation has been preserved."
                 respond "You may want to run '#{$clean_lich_char}lich5-update --revert' if needed."
@@ -197,6 +196,28 @@ module Lich
           end
 
           ["#{owner}/#{repo_name}", branch_name]
+        end
+
+        # Tells the user where the snapshot taken before this update is, what
+        # --revert restores from it and how to put everything back by hand.
+        # --revert does not restore the top-level files, and after a restart
+        # it runs the installed tree's code, so these steps are the only way
+        # back that always works. Each live directory is named on its own, as
+        # --lib-dir and --script-dir can move them out of LICH_DIR.
+        #
+        # @param snapshot_dir [String] snapshot taken before this update
+        # @return [void]
+        # @api private
+        def respond_recovery_steps(snapshot_dir)
+          launcher = File.basename($PROGRAM_NAME)
+          respond "Your previous installation is saved in: #{snapshot_dir}"
+          respond "'#{$clean_lich_char}lich5-update --revert' puts back its lib/, #{launcher} and core scripts, but it"
+          respond "may not put back Gemfile, Gemfile.lock and LICENSE; for those, do the last two"
+          respond "steps below. If Lich will not start, do all of them, from that folder:"
+          respond "  1. Delete #{LIB_DIR}, then copy the folder's lib/ in its place (do not merge)."
+          respond "  2. Copy the scripts in the folder's scripts/ into #{SCRIPT_DIR}."
+          respond "  3. Copy the folder's #{launcher} and any Gemfile, Gemfile.lock and LICENSE it has into #{LICH_DIR}."
+          respond "  4. If the folder has no Gemfile.lock, delete the one in #{LICH_DIR}."
         end
 
         # Names the lich-5 repository of +owner+.

@@ -374,8 +374,8 @@ module Lich
         #
         # Only a regular file that can be read is copied (through a link, its
         # target's bytes). A directory, a dangling link or an unreadable file
-        # is skipped, so the snapshot never fails where it did before these
-        # files were copied.
+        # is skipped, so a snapshot that succeeded before these files were
+        # copied still succeeds.
         #
         # @param dest [String] snapshot directory being filled
         # @return [void]
