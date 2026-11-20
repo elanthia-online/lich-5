@@ -120,6 +120,22 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     messages
   end
 
+  describe '.declared_version' do
+    def version_of(content)
+      path = File.join(root, 'version.rb')
+      File.write(path, content)
+      described_class.declared_version(path)
+    end
+
+    it 'reads the assignment, not a comment above it that mentions one' do
+      expect(version_of("# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n")).to eq('v6')
+    end
+
+    it 'reads an indented assignment, as in a module body' do
+      expect(version_of("module Lich\n  LICH_VERSION = '5.25.0'\nend\n")).to eq('5.25.0')
+    end
+  end
+
   describe '#new_data_backup_dir' do
     it 'uses a prefix that #revert\'s snapshot glob cannot match' do
       data_backup_dir = manager.new_data_backup_dir

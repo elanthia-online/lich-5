@@ -338,16 +338,23 @@ end
 # after a failure once files were replaced. Each live directory is named on
 # its own (--lib-dir and --script-dir move them) and the launcher is the one
 # running, so neither may be hard-coded.
-def expected_branch_recovery_steps(snapshot_dir)
+def expected_branch_recovery_steps(snapshot_dir, lib_dir: LIB_DIR, script_dir: SCRIPT_DIR)
   launcher = File.basename($PROGRAM_NAME)
-  ["Your previous installation is saved in: #{snapshot_dir}",
-   "'#{$clean_lich_char}lich5-update --revert' puts back its lib/, #{launcher} and core scripts, but it",
-   'may not put back Gemfile, Gemfile.lock and LICENSE; for those, do the last two',
-   'steps below. If Lich will not start, do all of them, from that folder:',
-   "  1. Delete #{LIB_DIR}, then copy the folder's lib/ in its place (do not merge).",
-   "  2. Copy the scripts in the folder's scripts/ into #{SCRIPT_DIR}.",
-   "  3. Copy the folder's #{launcher} and any Gemfile, Gemfile.lock and LICENSE it has into #{LICH_DIR}.",
-   "  4. If the folder has no Gemfile.lock, delete the one in #{LICH_DIR}."]
+  lich_dir = File.expand_path(LICH_DIR)
+  lib_dir = File.expand_path(lib_dir, lich_dir)
+  script_dir = File.expand_path(script_dir, lich_dir)
+  saved = File.expand_path(snapshot_dir, lich_dir)
+  ["Your previous installation is saved in: #{saved}",
+   "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until",
+   "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but",
+   'may not put back Gemfile, Gemfile.lock and LICENSE. For those, do steps 3 and 4.',
+   'If Lich will not start, or to come back to this snapshot later, do all four:',
+   "  1. Move everything in #{lib_dir} to a new folder outside it and keep that",
+   '     folder (a failed --revert may have left the only copy of files there), then',
+   "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}.",
+   "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}.",
+   "  3. Copy #{launcher} and any Gemfile, Gemfile.lock and LICENSE in #{saved} into #{lich_dir}.",
+   "  4. If #{saved} has no Gemfile.lock, delete the one in #{lich_dir}."]
 end
 
 # --branch names a lich-5 branch, a fork's lich-5 branch (owner:branch), or a
@@ -467,6 +474,18 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller branch specs' do
     expect(saved).to be < messages.index('You should exit the game, then log back in to use the updated version.')
   end
 
+  it 'names where relative --lib-dir and --script-dir paths really are, since Lich resolves them against LICH_DIR' do
+    stub_const('LIB_DIR', './lib')
+    stub_const('SCRIPT_DIR', 'scripts')
+    allow(installer).to receive(:respond) { |message = ''| messages << message.to_s }
+
+    installer.send(:respond_recovery_steps, 'backup/L5-snapshot-2026-11-20-00-00-00')
+
+    expect(messages).to eq(expected_branch_recovery_steps('backup/L5-snapshot-2026-11-20-00-00-00', lib_dir: './lib', script_dir: 'scripts'))
+    expect(messages).to include(a_string_including("into the now empty #{File.join(File.expand_path(LICH_DIR), 'lib')}."))
+    expect(messages.first).to eq("Your previous installation is saved in: #{File.join(File.expand_path(LICH_DIR), 'backup', 'L5-snapshot-2026-11-20-00-00-00')}")
+  end
+
   it 'shows the usage text for an empty --branch= given to the command' do
     allow(Lich::Util::Update).to receive(:branch_installer).and_return(installer)
 
@@ -542,11 +561,13 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
   # The version is read without running the file, stored, and compared with
   # Gem::Version at login; store_branch_tracking reads the file as text.
   {
-    'a computed version'       => "LICH_VERSION = [6, 0, 0].join('.')\n",
-    'an interpolated version'  => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
-    'a v prefix'               => "LICH_VERSION = 'v6.0.0'\n",
-    'build metadata'           => "LICH_VERSION = '6.0.0-alpha+x'\n",
-    'a byte that is not UTF-8' => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
+    'a computed version'                => "LICH_VERSION = [6, 0, 0].join('.')\n",
+    'an interpolated version'           => "LICH_VERSION = \"\#{MAJOR}.0.0\"\n",
+    'a v prefix'                        => "LICH_VERSION = 'v6.0.0'\n",
+    'build metadata'                    => "LICH_VERSION = '6.0.0-alpha+x'\n",
+    'a valid version only in a comment' => "# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n",
+    'two assignments'                   => "LICH_VERSION = '6.0.0'\nLICH_VERSION = '6.1.0'\n",
+    'a byte that is not UTF-8'          => "LICH_VERSION = '6.0.0'\n# #{[0xFF].pack('C')}\n".b
   }.each do |shape, content|
     it "refuses a lib/version.rb with #{shape} before installing" do
       lay_out('lib', 'lich.rbw', 'Gemfile', 'LICENSE')
@@ -555,7 +576,7 @@ RSpec.describe 'Lich::Util::Update::BranchInstaller downloads that cannot be ins
       installer.download_branch_update('elanthia-online/lich-6:main')
 
       expect(release_installer).not_to have_received(:perform_update)
-      expect(messages).to include(a_string_including("must be UTF-8 and assign LICH_VERSION a version number in quotes (e.g. '6.0.0')"))
+      expect(messages).to include(a_string_including("must be UTF-8 and assign LICH_VERSION once, a version number in quotes (e.g. '6.0.0')"))
       expect(messages).to include('Your installation has been preserved.')
     end
   end

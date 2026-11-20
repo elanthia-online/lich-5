@@ -30,7 +30,11 @@ module Lich
       class SnapshotManager
         # A LICH_VERSION assigned a string literal: the only form #revert
         # reads, as it never runs a snapshot's code.
-        LICH_VERSION_PATTERN = /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/.freeze
+        # Anchored to the start of a line, so a comment that mentions an
+        # assignment (e.g. "# Example: LICH_VERSION = '6.0.0'") is not read
+        # in place of the real one. Every lib/version.rb in lich-5's history
+        # assigns it at the start of a line.
+        LICH_VERSION_PATTERN = /^[ \t]*LICH_VERSION[ \t]*=[ \t]*['"]([^'"\n]+)['"]/.freeze
 
         # Reads the version a version.rb declares, without running it. Shared
         # with ReleaseInstaller#extract_version_from_file, so a tree an
