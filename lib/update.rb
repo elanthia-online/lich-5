@@ -25,8 +25,11 @@ require_relative 'common/update/tarball'
 require_relative 'common/update/tracked_scripts'
 require_relative 'common/update/custom_repos'
 require_relative 'common/update/gem_packages'
+require_relative 'common/update/script_floor'
+require_relative 'common/update/held_scripts'
 require_relative 'common/update/script_sync'
 require_relative 'common/update/file_updater'
+require_relative 'common/update/webui_preflight'
 require_relative 'common/update/release_installer'
 require_relative 'common/update/branch_installer'
 
@@ -201,7 +204,7 @@ module Lich
     --branch=<name>          Update to a specific GitHub branch
     --status                 Show current version and branch tracking info
     --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
-    --revert                 Roll the Lich5 ecosystem back to the most recent snapshot
+    --revert                 Roll the Lich5 ecosystem back to the last installed stable release
 
   [Script repository sync]
     #{$clean_lich_char}lich5-update --sync                              Sync all repos for current game
@@ -249,7 +252,7 @@ module Lich
     #{$clean_lich_char}lich5-update --announce                  Check to see if a new version is available
     #{$clean_lich_char}lich5-update --update                    Update the Lich5 ecosystem to the current release
     #{$clean_lich_char}lich5-update --branch=<name>             Update to a specific GitHub branch (advanced)
-    #{$clean_lich_char}lich5-update --revert                    Roll the Lich5 ecosystem back to latest snapshot
+    #{$clean_lich_char}lich5-update --revert                    Roll the Lich5 ecosystem back to the last stable release
 
   [Branch update examples]
     #{$clean_lich_char}lich5-update --branch=main               Update to the main stable branch

@@ -181,6 +181,15 @@ module Lich
         end
         private_class_method :delete_quietly
 
+        # The SHA git gives +content+ as a blob, which is what a GitHub file
+        # list reports for each file.
+        #
+        # @param content [String] file content
+        # @return [String] 40-character hex SHA1
+        def self.blob_sha(content)
+          Digest::SHA1.hexdigest("blob #{content.bytesize}\0#{content.b}")
+        end
+
         # Builds filename => git-SHA map for files in directory.
         #
         # @param dir [String] directory path
@@ -188,8 +197,7 @@ module Lich
         # @return [Hash<String, String>] filename => SHA1 hash
         def self.build_local_sha_map(dir, pattern = '*.lic')
           Dir[File.join(dir, pattern)].each_with_object({}) do |path, map|
-            body = File.binread(path)
-            map[File.basename(path)] = Digest::SHA1.hexdigest("blob #{body.size}\0#{body}")
+            map[File.basename(path)] = blob_sha(File.binread(path))
           end
         end
       end
