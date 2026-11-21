@@ -345,9 +345,10 @@ def expected_branch_recovery_steps(snapshot_dir, lib_dir: LIB_DIR, script_dir: S
   script_dir = File.expand_path(script_dir, lich_dir)
   saved = File.expand_path(snapshot_dir, lich_dir)
   ["Your previous installation is saved in: #{saved}",
-   "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until",
-   "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but",
-   'may not put back Gemfile and LICENSE. For those, do step 3.',
+   "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot of a stable release, which is",
+   'this one only if you were on a stable release and nothing has updated or taken a snapshot',
+   "since. It puts back lib/, #{launcher} and core scripts but may not put back Gemfile and",
+   'LICENSE; for those, do step 3.',
    "If Lich will not start, or to put back this snapshot's program files later, do all three:",
    "  1. Move everything in #{lib_dir} to a new folder outside it and keep that",
    '     folder (a failed --revert may have left the only copy of files there), then',

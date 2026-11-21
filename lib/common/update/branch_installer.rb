@@ -231,9 +231,10 @@ module Lich
           script_dir = File.expand_path(SCRIPT_DIR, lich_dir)
           saved = File.expand_path(snapshot_dir, lich_dir)
           respond "Your previous installation is saved in: #{saved}"
-          respond "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot, which is this one only until"
-          respond "another update or snapshot runs, and puts back its lib/, #{launcher} and core scripts but"
-          respond "may not put back Gemfile and LICENSE. For those, do step 3."
+          respond "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot of a stable release, which is"
+          respond "this one only if you were on a stable release and nothing has updated or taken a snapshot"
+          respond "since. It puts back lib/, #{launcher} and core scripts but may not put back Gemfile and"
+          respond "LICENSE; for those, do step 3."
           respond "If Lich will not start, or to put back this snapshot's program files later, do all three:"
           respond "  1. Move everything in #{lib_dir} to a new folder outside it and keep that"
           respond "     folder (a failed --revert may have left the only copy of files there), then"
