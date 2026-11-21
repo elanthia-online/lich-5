@@ -38,4 +38,103 @@ RSpec.describe Lich::Gemstone::Overwatch do
       described_class::Observer.consume(line, described_class::Observer.wants?(line))
     end
   end
+
+  describe 'Term::REVEALED_EXPLODES (Ascension onslaught plunderer)' do
+    # Raw XML captured live; player name anonymized.
+    let(:first_person) do
+      '<pushBold/>A <a exist="2168386" noun="plunderer">masked goliath plunderer</a><popBold/> explodes from the shadows!  ' \
+        '<pushBold/><a exist="2168386" noun="plunderer">His</a><popBold/> shining eyes agleam with cunning, ' \
+        '<pushBold/>a <a exist="2168386" noun="plunderer">masked goliath plunderer</a><popBold/> lashes out at you with ' \
+        '<pushBold/><a exist="2168386" noun="plunderer">his</a><popBold/> <a exist="2168388" noun="sword-breaker">rainbow glaes sword-breaker</a>!'
+    end
+
+    let(:third_person) do
+      '<pushBold/>A <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> explodes from the shadows!  ' \
+        '<pushBold/><a exist="57655053" noun="plunderer">His</a><popBold/> shining eyes agleam with cunning, ' \
+        '<pushBold/>a <a exist="57655053" noun="plunderer">masked goliath plunderer</a><popBold/> lashes out at ' \
+        '<a exist="-1234567" noun="Examplechar">Examplechar</a> with ' \
+        '<pushBold/><a exist="57655053" noun="plunderer">his</a><popBold/> <a exist="57655057" noun="poignard">rainbow glaes poignard</a>!'
+    end
+
+    {
+      'the 1st-person view (attacking you)'            => [:first_person, '2168386'],
+      'the 3rd-person view (attacking another player)' => [:third_person, '57655053'],
+    }.each do |desc, (line_name, id)|
+      context desc do
+        let(:line) { send(line_name) }
+
+        it 'captures the revealed creature id, noun and name' do
+          match = line.match(term::REVEALED_EXPLODES)
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('plunderer')
+          expect(match[:name]).to eq('masked goliath plunderer')
+        end
+
+        it 'is part of ANY_REVEALED and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_REVEALED)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature into the target list via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with(id, 'plunderer', 'masked goliath plunderer')
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
+
+  describe 'Term::SILENT_CANNIBAL_SWING / SILENT_CANNIBAL_GRAPPLE (bloody halfling cannibal)' do
+    # Raw XML captured live (two characters in the same fight); player names anonymized.
+    {
+      'swing, 1st-person view (attacking you)'              => [
+        :SILENT_CANNIBAL_SWING, '1312018',
+        'With an ululating shriek, <pushBold/>a <a exist="1312018" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and hurtles at you, swinging wildly with a ' \
+          '<a exist="1312019" noun="dagger">twisted obsidian dagger</a>!'
+      ],
+      'swing, 3rd-person view (attacking another player)'   => [
+        :SILENT_CANNIBAL_SWING, '1312018',
+        'With an ululating shriek, <pushBold/>a <a exist="1312018" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and hurtles at <a exist="-1234567" noun="Examplechar">Examplechar</a>, swinging wildly with a ' \
+          '<a exist="1312019" noun="dagger">twisted obsidian dagger</a>!'
+      ],
+      'grapple, 1st-person view (attacking you)'            => [
+        :SILENT_CANNIBAL_GRAPPLE, '1312024',
+        'With an ululating shriek, <pushBold/>a <a exist="1312024" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and throws <pushBold/><a exist="1312024" noun="cannibal">his</a><popBold/> ' \
+          'wiry arms around you, fueled by panicked hunger!'
+      ],
+      'grapple, 3rd-person view (attacking another player)' => [
+        :SILENT_CANNIBAL_GRAPPLE, '1312024',
+        'With an ululating shriek, <pushBold/>a <a exist="1312024" noun="cannibal">bloody halfling cannibal</a><popBold/> ' \
+          'leaps from the shadows and throws <pushBold/><a exist="1312024" noun="cannibal">his</a><popBold/> ' \
+          'wiry arms around <a exist="-7654321" noun="Otherchar">Otherchar</a>, fueled by panicked hunger!'
+      ],
+    }.each do |desc, (const, id, raw)|
+      context desc do
+        let(:line) { raw }
+
+        it 'captures the creature id, noun and name' do
+          match = line.match(term.const_get(const))
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('cannibal')
+          expect(match[:name]).to eq('bloody halfling cannibal')
+        end
+
+        it 'is part of ANY_SILENT_STRIKE and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_SILENT_STRIKE)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature as a silent strike via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with(id, 'cannibal', 'bloody halfling cannibal', silent_strike: true)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
 end

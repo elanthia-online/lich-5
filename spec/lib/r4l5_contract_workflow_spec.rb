@@ -20,7 +20,6 @@ RSpec.describe 'Windows release contract gates' do
       gate = steps.index { |step| step['uses'] == './.github/actions/check-r4l5-contract' }
       publication = steps.index { |step| step['uses']&.start_with?('googleapis/release-please-action@') }
       expect(gate).to be < publication
-      expect(steps.fetch(gate)).not_to have_key('if')
     end
 
     it "checks the downloaded executable before attachment in #{name}" do
@@ -31,6 +30,35 @@ RSpec.describe 'Windows release contract gates' do
       expect(gate).to be > download
       expect(gate).to be < upload
     end
+  end
+
+  it 'runs the pre-tag contract check unconditionally for a stable release' do
+    steps = workflow('release-on-push-stable.yaml').fetch('jobs').fetch('release').fetch('steps')
+    gate = steps.find { |step| step['uses'] == './.github/actions/check-r4l5-contract' }
+    expect(gate).not_to have_key('if')
+  end
+
+  it 'skips the pre-tag contract check for a prerelease only when the merged PR is labelled installer-less' do
+    steps = workflow('release-on-push-prerelease.yaml').fetch('jobs').fetch('release').fetch('steps')
+    labels = steps.index { |step| step['id'] == 'installer_less' }
+    gate = steps.index { |step| step['uses'] == './.github/actions/check-r4l5-contract' }
+    expect(labels).to be < gate
+    expect(steps.fetch(gate).fetch('if')).to eq("${{ steps.installer_less.outputs.skip_contract != 'true' }}")
+
+    lookup = steps.fetch(labels)
+    expect(lookup.fetch('env')).to include('PUSHED_SHA' => '${{ github.sha }}', 'BASE' => '${{ github.ref_name }}')
+    run = lookup.fetch('run')
+    # Only the two installer labels on the merged PR for this push turn the
+    # check off; a failed lookup or no PR leaves it on.
+    expect(run).to include('/commits/${PUSHED_SHA}/pulls', "|| echo '[]'", 'select(.merged_at != null and .base.ref == $base)')
+    expect(run).to include('skip="false"', '(skip-installer|no-installer)', 'echo "skip_contract=$skip" >> "$GITHUB_OUTPUT"')
+    expect(run.scan('skip="true"').size).to eq(1)
+  end
+
+  it 'keeps the installer check of a prerelease that does attach an installer' do
+    steps = workflow('release-on-push-prerelease.yaml').fetch('jobs').fetch('build_installer').fetch('steps')
+    gate = steps.find { |step| step.dig('with', 'installer') == 'Ruby4Lich5.exe' }
+    expect(gate).not_to have_key('if')
   end
 
   %w[ci.yml release-on-push-stable.yaml release-on-push-prerelease.yaml rebuild-release-assets.yaml].each do |name|

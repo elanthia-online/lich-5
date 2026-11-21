@@ -77,6 +77,27 @@ module UpdateSpecHelpers
   def git_blob_sha(content)
     Digest::SHA1.hexdigest("blob #{content.bytesize}\0#{content}")
   end
+
+  # A script whose header declares +floor+ as its minimum Lich version.
+  def script_requiring(floor, body = 'v')
+    "=begin\n  required: Lich >= #{floor}\n=end\necho '#{body}'\n"
+  end
+end
+
+# Loads the real Lich::Common::Script for one example group, so floors are
+# read and compared by the code Lich runs, and removes it again afterwards
+# the way script_version_gate_spec.rb does.
+RSpec.shared_context 'with the real script floor reader' do
+  before(:context) do
+    require_relative '../../../../lib/common/script'
+  end
+
+  after(:context) do
+    %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+      Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
+    end
+    $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
+  end
 end
 
 RSpec.configure do |config|

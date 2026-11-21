@@ -1689,7 +1689,7 @@ RSpec.describe Lich::GameBase::Game do
       # need real behavior -- neither mock implements .add/.remove
       # (DownstreamHook) or supports_sentinel? (Frontend). Rebind both to
       # the real classes for this block, independent of file load order
-      # across the suite (see util_spec.rb for the load-order failure this
+      # across the suite (see util_spec.rb's capture_command block for the load-order failure this
       # protects against).
       stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       stub_const('Frontend', Lich::Common::Frontend)
@@ -2981,5 +2981,45 @@ RSpec.describe Lich::GameBase::Game, '.process_server_string with a line cut by 
     described_class.process_server_string(+"\r\n")
     described_class.process_server_string(+"<prompt time=\"1793017427\">&gt;</prompt>\r\n")
     expect(@hooked).to eq(["...wait 4 seconds.\r\n", "The fingers lands a good strike to its chest!  \r\n", "<prompt time=\"1793017427\">&gt;</prompt>\r\n"])
+  end
+end
+
+RSpec.describe Lich::GameBase::Game, '.process_server_string text lines for downstream hooks' do
+  before do
+    # The real XMLParser with its tag handlers neutered (as in the stream
+    # desync specs): this example is about the text lines, not parser state.
+    parser = Class.new(Lich::Common::XMLParser) do
+      def tag_start(_name, _attributes); end
+
+      def tag_end(_name); end
+
+      def text(_value); end
+    end.new
+    stub_const('XMLData', parser)
+    @saved = $_SERVERBUFFER_
+    $_SERVERBUFFER_ = []
+    @seen = []
+    allow(Lich).to receive(:log)
+    allow(described_class).to receive(:process_downstream_hooks) { @seen << Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] }
+    allow(Lich::Common::Inventory).to receive(:observe) if defined?(Lich::Common::Inventory)
+    # The global strip_xml (lib/global_defs.rb) delegates to Markup; this
+    # file does not load global_defs.
+    allow(described_class).to receive(:strip_xml) { |line, type: nil| Lich::Common::Markup.strip_xml(line, type: type) }
+  end
+
+  after do
+    $_SERVERBUFFER_ = @saved
+    $strip_xml_multiline&.delete('main')
+    Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = nil
+  end
+
+  it 'gives the hooks the text lines decoded for the scripts, and none for a string that is not decoded' do
+    # The empty line between is not pushed to script buffers, so it is not
+    # in the hooks' lines either: the two must count alike.
+    described_class.process_server_string(+"You flip the coin.\r\n\r\nIt lands heads up.\r\n")
+    allow(described_class).to receive(:process_xml_data)
+    described_class.process_server_string(+"Unparsed.\r\n")
+
+    expect(@seen).to eq([['You flip the coin.', 'It lands heads up.'], []])
   end
 end

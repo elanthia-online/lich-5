@@ -34,6 +34,10 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
     allow(installer).to receive(:monsterbold_start).and_return('')
     allow(installer).to receive(:monsterbold_end).and_return('')
     stub_const('RUBY_VERSION', '3.4.7')
+    # Whether this machine could open the beta's windows is not what these
+    # examples are about; the ones that are set their own answer.
+    allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(nil)
+    allow(Lich::Util::Update::WebUIPreflight).to receive(:headless_session?).and_return(false)
   end
 
   # The real installer is memoized for the whole Lich session, so one instance
@@ -567,6 +571,92 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
         expect(messages).to include(a_string_matching(/To confirm your participation, run:  .*lich5-update --beta --confirm\z/))
         expect(messages).to include(a_string_matching(/You have #{window} seconds to confirm\./))
         expect(messages.grep(/send Y|send N/)).to be_empty
+      end
+    end
+
+    describe 'on a computer that cannot open the beta\'s windows' do
+      let(:reason) { 'Google Chrome or Chromium is required to open the WebUI launcher window; install it, or set the LICH_WEBUI_BROWSER environment variable to another browser' }
+
+      before do
+        allow(resolver).to receive(:resolve_channel_ref).and_return('5.16.0-beta.1')
+        allow(snapshot_manager).to receive(:snapshot)
+      end
+
+      it 'refuses at the notice step, saying why, how to proceed, and that staying on stable is fine' do
+        allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+
+        installer.prep_betatest
+
+        expect(messages).to include("  #{reason}.")
+        expect(messages).to include('The beta was not installed and nothing was changed.  You can stay on the stable release.')
+        expect(messages).to include('To install the beta, set the LICH_WEBUI_BROWSER environment variable to the full path of')
+        expect(messages.grep(/To confirm your participation/)).to be_empty
+      end
+
+      it 'opens no confirmation window, so a confirm installs nothing' do
+        allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+        installer.prep_betatest
+        allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(nil)
+
+        installer.confirm_betatest
+
+        expect(messages).to include(a_string_matching(/There is no beta test request to confirm/))
+        expect(resolver).not_to have_received(:resolve_channel_ref)
+        expect(snapshot_manager).not_to have_received(:snapshot)
+      end
+
+      it 'refuses at the confirm step too, before resolving or snapshotting anything' do
+        installer.prep_betatest
+        allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+
+        installer.confirm_betatest
+
+        expect(messages).to include("  #{reason}.")
+        expect(messages.grep(/accepted/)).to be_empty
+        expect(resolver).not_to have_received(:resolve_channel_ref)
+        expect(snapshot_manager).not_to have_received(:snapshot)
+      end
+
+      it 'does not stand in the way of a single-file beta update' do
+        allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+        file_updater = instance_double(Lich::Util::Update::FileUpdater)
+        allow(Lich::Util::Update::FileUpdater).to receive(:new).and_return(file_updater)
+        expect(file_updater).to receive(:update_file).with('library', 'foo.rb', 'beta')
+
+        installer.prep_betatest('library', 'foo.rb')
+
+        expect(Lich::Util::Update::WebUIPreflight).not_to have_received(:refusal)
+      end
+
+      context 'when this session runs without windows' do
+        before do
+          allow(Lich::Util::Update::WebUIPreflight).to receive(:refusal).and_return(reason)
+          allow(Lich::Util::Update::WebUIPreflight).to receive(:headless_session?).and_return(true)
+          # The install itself is not what these examples are about.
+          allow(resolver).to receive(:resolve_channel_ref).and_return(nil)
+          allow(resolver).to receive(:last_error).and_return(nil)
+        end
+
+        it 'warns that windowed sessions here would not open the beta\'s windows, and still offers the beta' do
+          installer.prep_betatest
+
+          expect(messages).to include('Lich sessions with windows would not be able to open the beta\'s windows on this computer:')
+          expect(messages).to include("  #{reason}.")
+          expect(messages.grep(/was not installed/)).to be_empty
+          expect(messages).to include(a_string_matching(/To confirm your participation, run:/))
+        end
+
+        it 'installs on confirm without repeating the warning' do
+          installer.prep_betatest
+          shown = messages.count("  #{reason}.")
+
+          installer.confirm_betatest
+
+          expect(shown).to eq(1)
+          expect(messages.count("  #{reason}.")).to eq(1)
+          expect(messages).to include('Beta test installation accepted.  Thank you for considering!')
+          expect(resolver).to have_received(:resolve_channel_ref)
+        end
       end
     end
 

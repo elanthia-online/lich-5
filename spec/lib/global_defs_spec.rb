@@ -325,6 +325,24 @@ RSpec.describe '#fput' do
       expect(fput('get sword', resend_transient: true, max_resends: 5)).to eq('You pick up a sword.')
     end
 
+    it 'calls on_send with every command it sends, before sending it' do
+      stub_game_responses('...wait 2 seconds.', 'You struggle but fail to stand.', 'You stand back up.',
+                          'Sorry, you may only type ahead 1 command.', 'You pick up a sword.')
+      events = []
+      allow(self).to receive(:put) { |cmd| events << [:put, cmd] }
+
+      result = fput('get sword', on_send: ->(cmd) { events << [:on_send, cmd] })
+
+      expect(result).to eq('You pick up a sword.')
+      expect(events).to eq([[:on_send, 'get sword'], [:put, 'get sword'], [:on_send, 'get sword'], [:put, 'get sword'],
+                            [:on_send, 'stand'], [:put, 'stand'], [:on_send, 'get sword'], [:put, 'get sword'],
+                            [:on_send, 'get sword'], [:put, 'get sword']])
+    end
+
+    it 'rejects an on_send that cannot be called' do
+      expect { fput('get sword', on_send: 'nope') }.to raise_error(ArgumentError, /on_send/)
+    end
+
     it 'stops on the interrupt during a roundtime wait, in slices' do
       stub_game_responses('...wait 3 seconds.', 'OK.')
       calls = 0
@@ -341,7 +359,35 @@ RSpec.describe '#fput' do
       expect(self).to receive(:put).with('get sword').twice
 
       expect(fput('get sword', interrupt: -> { (checks += 1) > 50 }, failures: :symbol)).to eq('OK.')
-      expect(checks).to eq(10)
+      expect(checks).to eq(11) # one per slice, and once more before the resend
+    end
+
+    it 'does not resend when the interrupt fires during the last slice of a roundtime wait' do
+      stub_game_responses('...wait 1 seconds.', 'OK.')
+      checks = 0
+      expect(self).to receive(:put).with('get sword').once
+
+      expect(fput('get sword', interrupt: -> { (checks += 1) > 10 }, failures: :symbol)).to eq(:interrupted)
+    end
+
+    it 'asks the interrupt before resending after the stand reply' do
+      stub_game_responses('You struggle but fail to stand.', 'You stand back up.', 'OK.')
+      fired = false
+      allow(self).to receive(:put) { |cmd| fired = true if cmd == 'stand' }
+
+      result = fput('get sword', interrupt: -> { fired }, failures: :symbol)
+
+      expect(result).to eq(:interrupted)
+      expect(self).to have_received(:put).with('get sword').once
+    end
+
+    it 'asks the interrupt before resending after a type-ahead refusal' do
+      stub_game_responses('Sorry, you may only type ahead 1 command.', 'OK.')
+      checks = 0
+      expect(self).to receive(:put).with('get sword').once
+
+      # never during the one-second wait; it fires only at the resend check
+      expect(fput('get sword', interrupt: -> { (checks += 1) > 11 }, failures: :symbol)).to eq(:interrupted)
     end
 
     it 'stops on the interrupt while waiting for any response' do

@@ -3,11 +3,18 @@
 #   Create prerelease tags/releases on pushes to pre/*, then package/upload
 #   core archives and attach the latest optional Ruby4Lich5 Windows installer.
 #   production-formatted release body/title as early as possible.
+#   The release is converted to a DRAFT as soon as it is created and stays
+#   flagged as a prerelease; a person publishes it.
 #
 # INVARIANTS
+# - The release is a DRAFT (not public) until a person publishes it via the
+#   GitHub UI/CLI, and it is still a prerelease when published.
 # - Release body/title must be finalized *before* packaging begins.
 # - No reliance on a local git checkout for GH release edits/uploads.
 # - PR labels 'skip-installer' or 'no-installer' gate installer attachment (case-insensitive).
+# - The same labels skip the pre-tag R4L5 contract check: an installer-less
+#   prerelease is reached only from a logged-in session whose Ruby and gems
+#   were already checked at login, so Ruby4Lich5 recovery does not apply.
 #
 # INPUTS (selected)
 # - Branch trigger: pre/beta or pre/beta/*
@@ -51,7 +58,36 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # An installer-less prerelease is an in-game package for installs that
+      # already work, so the pre-tag contract check does not apply to it. The
+      # labels are read from the merged pull request this push came from, with
+      # the same match as installer_gate. A push with no such pull request, or
+      # a failed lookup, keeps the check.
+      - name: Detect installer-less release PR
+        id: installer_less
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUSHED_SHA: ${{ github.sha }}
+          BASE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          pulls="$(gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/commits/${PUSHED_SHA}/pulls" 2>/dev/null || echo '[]')"
+          labels="$(printf '%s' "$pulls" | jq -r --arg base "$BASE" \
+            '.[] | select(.merged_at != null and .base.ref == $base) | .labels[].name' \
+            | tr '[:upper:]' '[:lower:]' || true)"
+          echo "Labels on the merged PR for ${PUSHED_SHA}: ${labels:-<none>}"
+          skip="false"
+          if echo "$labels" | grep -Eq '(^|[[:space:]])(skip-installer|no-installer)($|[[:space:]])'; then
+            skip="true"
+          fi
+          echo "skip_contract=$skip" >> "$GITHUB_OUTPUT"
+          echo "Resolved skip_contract=$skip"
+
       - uses: ./.github/actions/check-r4l5-contract
+        if: ${{ steps.installer_less.outputs.skip_contract != 'true' }}
 
       # 1) Release Please for prerelease branches
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -69,6 +105,19 @@ jobs:
         run: |
           echo "rp.release_created=${{ steps.rp.outputs.release_created }}"
           echo "rp.tag_name=${{ steps.rp.outputs.tag_name }}"
+
+      # Convert the release to a draft right away, before anything else, so the
+      # beta is not public until a person publishes it. --prerelease keeps it
+      # flagged as a prerelease when that happens. The title/body edit and the
+      # asset uploads below find the draft by its tag.
+      - name: Convert release to draft
+        if: ${{ steps.rp.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          gh release edit -R "$GITHUB_REPOSITORY" "$TAG" --draft --prerelease
 
       # --- FAST-PATH: Fix release title/body immediately after RP creates it ---
       # Rationale: minimize user-visible lag by updating before any packaging/upload.

@@ -65,6 +65,26 @@ module Lich
           end
         end
 
+        # What the sync did for a script whose newest version needs a newer
+        # Lich, when it did more or less than keep the local copy.
+        HELD_OUTCOMES = {
+          installed_compatible: 'installed newest compatible version',
+          none_compatible: 'no compatible version found',
+          history_unavailable: 'older versions not checked; will retry next login'
+        }.freeze
+
+        # @param required [String] the Lich version the newest version needs
+        # @param outcome [Symbol, nil] a HELD_OUTCOMES key, or nil when the
+        #   local copy was kept as it was
+        # @param commit [String, nil] for :installed_compatible, the commit
+        #   installed, shown short so the user can tell which version it is
+        # @return [String] the Status cell for a held script
+        def self.held_status(required, outcome = nil, commit = nil)
+          done = HELD_OUTCOMES.fetch(outcome, 'not updated')
+          done = "#{done}, commit #{commit[0, 7]}" if commit && outcome == :installed_compatible
+          "needs Lich #{required}+ (#{done})"
+        end
+
         # Renders sync results as Terminal::Table.
         #
         # @param repo_name [String] repository display name
@@ -74,14 +94,18 @@ module Lich
         # @param subdir_names [Array<String>] subdirectory names
         # @param failed_scripts [Array<String>] scripts that failed (default: [])
         # @param failed_other [Hash<String, Array<String>>] subdir => failed files (default: {})
-        # @param held_scripts [Array<Array(String, String)>] [file, required Lich version] pairs
-        #   not installed because the running Lich is too old (default: [])
+        # @param held_scripts [Array<Array>] [file, required Lich version] pairs whose
+        #   newest version was not installed because the running Lich is too old, each with
+        #   an optional third element saying what happened instead (a HELD_OUTCOMES key)
+        #   and, for :installed_compatible, a fourth naming the commit installed;
+        #   without a third element the script was simply not updated (default: [])
         # @param missing_tracked [Array<Array(String, String)>] [file, status] pairs for
         #   tracked names the repo does not contain, so the sync does not update them (default: [])
         # @return [void]
         def self.render_sync_summary(repo_name, script_count, downloaded_scripts, downloaded_other, subdir_names, failed_scripts = [], failed_other = {}, held_scripts = [],
                                      missing_tracked: [])
-          total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length
+          installed_compatible = held_scripts.count { |_file, _required, outcome| outcome == :installed_compatible }
+          total_downloaded = downloaded_scripts.length + downloaded_other.values.flatten.length + installed_compatible
           total_failed = failed_scripts.length + failed_other.values.flatten.length
 
           if total_downloaded == 0 && total_failed == 0 && held_scripts.empty? && missing_tracked.empty?
@@ -102,7 +126,7 @@ module Lich
 
           downloaded_scripts.each { |f| table_rows << ['script', f, 'downloaded'] }
           failed_scripts.each { |f| table_rows << ['script', f, 'FAILED (will retry next login)'] }
-          held_scripts.each { |f, required| table_rows << ['script', f, "needs Lich #{required}+ (not updated)"] }
+          held_scripts.each { |f, required, outcome, commit| table_rows << ['script', f, held_status(required, outcome, commit)] }
           missing_tracked.each { |f, status| table_rows << ['script', f, status] }
 
           downloaded_other.each do |subdir, files|

@@ -30,6 +30,13 @@ module Lich
     # state -- games.rb clears $strip_xml_multiline directly on reconnect
     # (see games.rb:435), and that remains a supported reach-in.
     module Markup
+      # Thread-local key under which the game thread holds the text lines
+      # (strip_xml type "main", split on CRLF, empties dropped) of the server
+      # string whose downstream hooks are running: the lines the scripts'
+      # text buffers received for it. Set by Game#process_server_string; an
+      # empty Array for a string that produced no text.
+      DOWNSTREAM_TEXT_KEY = :lich_downstream_text
+
       # Streams whose content is presented elsewhere in the frontend (the
       # spell window, the inventory pane) and so must not be echoed inline.
       SUPPRESSED_STREAMS = /<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m.freeze

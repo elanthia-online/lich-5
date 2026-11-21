@@ -985,6 +985,9 @@ module Lich
 
         def process_server_string(server_string)
           $cmd_prefix = String.new if server_string =~ /^\034GSw/
+          # No text lines for this string until process_xml_data decodes it
+          # (it may not, e.g. for <settings> or a desynced fragment).
+          Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = []
 
           # Load game-specific modules if needed
           unless (XMLData.game.nil? || XMLData.game.empty?)
@@ -1099,6 +1102,8 @@ module Lich
         end
 
         def process_xml_data(server_string)
+          # Nothing decoded yet for this string, whichever way it returns.
+          Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = []
           begin
             # Ox is a permissive parser: it handles Simu's not-quite-XML stream
             # without the clean/retry dance REXML required (nested quotes, missing
@@ -1147,10 +1152,17 @@ module Lich
           Script.new_downstream_xml(server_string) if defined?(Script)
 
           # Process stripped server string
+          text_lines = []
           stripped_server.split("\r\n").each do |line|
             @buffer.update(line) if defined?(TESTING) && TESTING
-            Script.new_downstream(line) if defined?(Script) && !line.empty?
+            next if line.empty?
+
+            Script.new_downstream(line) if defined?(Script)
+            text_lines << line
           end
+          # The downstream hooks that follow read the same lines (see
+          # Markup::DOWNSTREAM_TEXT_KEY), e.g. Util.capture_command in text mode.
+          Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY] = text_lines.freeze
         end
 
         # Promote truncation-class Ox parse errors to GameStreamDesyncError so
