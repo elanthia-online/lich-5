@@ -532,6 +532,13 @@ module Lich
           # Overwatch patterns - simplified reference to the observer patterns
           Overwatch_Short = Overwatch::Observer::Term::ANY
 
+          # Group_Short is a loose prefilter: any "group" substring trips it,
+          # including one inside a player's name (e.g. an Overwatch reveal or an
+          # "Also here:" list naming "Agroupa"). Used as the `when` test so a line
+          # the Group observer does not want falls through to the later branches
+          # instead of being claimed as a group line and dropped.
+          Group_Wanted = ->(line) { Group_Short.match?(line) && Group::Observer.wants?(line) }
+
           # Split by anchoring so the common single-line server string can skip the
           # per-position scan of the line-start-anchored patterns (attempt them only
           # at \A) and scan just the genuinely mid-line ones. self.parse falls back
@@ -568,9 +575,8 @@ module Lich
                 npc.status = 'dead'
               end
               :ok
-            when Pattern::Group_Short
-              return :noop unless (match_data = Group::Observer.wants?(line))
-              Group::Observer.consume(line.strip, match_data)
+            when Pattern::Group_Wanted
+              Group::Observer.consume(line.strip, Group::Observer.wants?(line))
               :ok
             when Pattern::Overwatch_Short
               return :noop unless (match_data = Overwatch::Observer.wants?(line))
