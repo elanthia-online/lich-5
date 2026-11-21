@@ -117,6 +117,10 @@ jobs:
           persist-credentials: false
       - name: Run inert workflow guard tests
         run: bash .github/tests/test-guard-pre-branch-pr.sh
+      - name: Run beta pipeline script tests
+        run: |
+          bash .github/tests/test-next-beta-version.sh
+          bash .github/tests/test-curate-theirs.sh
 
   test:
     runs-on: ubuntu-latest
