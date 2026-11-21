@@ -117,6 +117,14 @@ jobs:
           persist-credentials: false
       - name: Run inert workflow guard tests
         run: bash .github/tests/test-guard-pre-branch-pr.sh
+      # The bundling script loads Lich's own script-header parser, so its test
+      # runs on the repository's Ruby rather than the runner's.
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          bundler: none
+          bundler-cache: false
+      - name: Run release packaging script tests
+        run: bash .github/tests/test-bundle-default-scripts.sh
       - name: Run beta pipeline script tests
         run: |
           bash .github/tests/test-next-beta-version.sh
