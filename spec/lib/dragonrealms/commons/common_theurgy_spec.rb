@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../../../../lib/common/downstreamhook'
+require_relative '../../../../lib/common/limitedarray'
 require_relative '../../../spec_helper'
 
 # Add methods needed by this spec (not in base spec_helper mocks)
@@ -14,6 +16,7 @@ require 'timeout'
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 require_relative '../../../../lib/dragonrealms/commons/common-theurgy'
 require File.join(LIB_DIR, 'util', 'util.rb')
+require File.join(LIB_DIR, 'common', 'markup.rb')
 
 RSpec.describe Lich::DragonRealms::DRCTH do
   # --- Constants -------------------------------------------------------
@@ -1038,18 +1041,17 @@ RSpec.describe Lich::DragonRealms::DRCTH do
 
     before do
       allow(Lich::Messaging).to receive(:msg) { |_type, text| messages << text }
-      stub_const('DownstreamHook', Class.new do
-        def self.add(*_args, **_kwargs); end
-
-        def self.remove(*_args); end
-      end)
+      # Drive the real hook path: issue_command captures from DownstreamHook,
+      # which the game thread runs on each server string.
+      stub_const('DownstreamHook', Lich::Common::DownstreamHook)
       allow(Script).to receive(:current).and_return(
-        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true)
+        OpenStruct.new(name: 'spec', silent: false, want_downstream: true, want_downstream_xml: true,
+                       downstream_buffer: Lich::Common::LimitedArray.new)
       )
-      allow(Lich::Util).to receive(:fput)
-      queue = replies.dup
-      # Hand out the scripted lines, then block like a quiet game would.
-      allow(Lich::Util).to receive(:get) { queue.empty? ? sleep(5) : queue.shift }
+      # The game answers the command with the scripted lines, then goes quiet.
+      allow(Lich::Util).to receive(:fput) do |*_args, **_opts|
+        Thread.new { replies.each { |line| DownstreamHook.run(line) } }
+      end
       # Keep the real method but shorten its timeout so the examples run fast.
       allow(Lich::Util).to receive(:issue_command).and_wrap_original do |original, *args, **kwargs|
         original.call(*args, **kwargs, timeout: 0.2)

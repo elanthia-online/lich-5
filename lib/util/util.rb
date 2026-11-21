@@ -3,6 +3,7 @@ util.rb: Core lich file for collection of utilities to extend Lich capabilities.
 Entries added here should always be accessible from Lich::Util.feature namespace.
 =end
 
+require 'securerandom'
 require_relative 'deep_freeze'
 
 module Lich
@@ -142,86 +143,389 @@ module Lich
       "#{tags.join}\n"
     end
 
-    # Issues a command to the game and captures output between start and end patterns.
+    # The outcome of {capture_command}.
     #
-    # @param command [String] The command to send.
-    # @param start_pattern [Regexp] Pattern marking the start of output capture.
-    # @param end_pattern [Regexp, Symbol] Pattern marking the end of output capture. Defaults to /<prompt/. Use :ignore for single-line capture.
-    # @param include_end [Boolean] Whether to include the end line in the result. Defaults to true.
-    # @param timeout [Integer] Timeout in seconds for the command. Defaults to 5.
-    # @param silent [Boolean, nil] Whether to silence script output. Defaults to nil (no change).
-    # @param usexml [Boolean] Whether to use XML downstream. Defaults to true.
-    # @param quiet [Boolean] If true, suppresses output of lines to FE starting with the start_pattern and ending with the end_pattern. Defaults to false.
-    # @param use_fput [Boolean] If true, uses fput to send the command; otherwise uses put. Defaults to true.
-    # @return [Array<String>] Lines of output captured between start and end patterns.
-    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
-      result = []
-      name = self.anon_hook
-      filter = false
-      ignore_end = end_pattern.eql?(:ignore)
-
-      save_script_silent = Script.current.silent
-      save_want_downstream = Script.current.want_downstream
-      save_want_downstream_xml = Script.current.want_downstream_xml
-
-      Script.current.silent = silent if !silent.nil?
-      Script.current.want_downstream = !usexml
-      Script.current.want_downstream_xml = usexml
-
-      begin
-        Timeout::timeout(timeout, Interrupt) {
-          DownstreamHook.add(name, proc { |line|
-            if filter
-              if ignore_end || line =~ end_pattern
-                DownstreamHook.remove(name)
-                filter = false
-                if quiet && !ignore_end
-                  next(preserve_quiet_state_tags(line))
-                else
-                  line
-                end
-              else
-                if quiet
-                  next(preserve_quiet_state_tags(line))
-                else
-                  line
-                end
-              end
-            elsif line =~ start_pattern
-              filter = true
-              if quiet
-                next(preserve_quiet_state_tags(line))
-              else
-                line
-              end
-            else
-              line
-            end
-          }, persist: false) # scoped to this command; removed in the ensure below
-          use_fput ? fput(command) : put(command)
-
-          until (line = get) =~ start_pattern; end
-          result << line.rstrip
-          unless ignore_end
-            until (line = get) =~ end_pattern
-              result << line.rstrip
-            end
-          end
-          unless ignore_end
-            if include_end
-              result << line.rstrip
-            end
-          end
-        }
-      rescue Interrupt
-        nil
-      ensure
-        DownstreamHook.remove(name)
-        Script.current.silent = save_script_silent if !silent.nil?
-        Script.current.want_downstream = save_want_downstream
-        Script.current.want_downstream_xml = save_want_downstream_xml
+    # @!attribute [r] lines
+    #   @return [Array<String>] the captured lines; partial when not complete
+    # @!attribute [r] status
+    #   @return [Symbol] :complete, :no_start (timed out before start_pattern
+    #     matched), :no_end (start_pattern matched, end_pattern never did) or
+    #     :error (matching raised; logged, and the capture stopped at once)
+    CommandCapture = Struct.new(:lines, :status, keyword_init: true) do
+      # @return [Boolean] true when both the start and the end line were seen
+      def complete?
+        status == :complete
       end
-      return result
+    end
+
+    # Hook priorities for {capture_command}. The observer runs before every
+    # other hook so it sees each server string as the server sent it -- the
+    # same view the script's downstream buffer gets, which is filled before
+    # any hook runs. The suppressor runs after every other hook so that,
+    # under quiet: true, other scripts' hooks still see the lines being hidden
+    # from the frontend.
+    CAPTURE_OBSERVER_PRIORITY = 1_000_000_000
+    # See {CAPTURE_OBSERVER_PRIORITY}.
+    CAPTURE_SUPPRESSOR_PRIORITY = -1_000_000_000
+
+    # Text of the marker pushed onto the calling script's downstream buffer
+    # right after the end line, so the script thread can consume exactly the
+    # reply and nothing after it. A String (not a bare Object) so a stray
+    # read can never raise on =~. Each capture, and each restart of one,
+    # pushes its own copy and the drain matches it by identity, so a marker
+    # left by an earlier send is consumed rather than taken as the end.
+    CAPTURE_END_MARKER = "\u0000Lich::Util.capture_command:end\u0000".freeze
+
+    # A prompt tag and its text. Removed from the start line before that
+    # line is tested against end_pattern, so a prompt that shares the start
+    # line's server string does not end the capture on that string (the
+    # capture then ends at the next prompt, as before capture_command).
+    CAPTURE_PROMPT_TAG = %r{<prompt\b[^>]*>.*?</prompt>}m
+
+    # Longest time, in seconds, the calling script waits after the reply for
+    # the suppressor to hide the end line when a hook between the observer
+    # and the suppressor is slow; a hook slower than this still lets the end
+    # line through. Kept short: if another hook squelches the end line the
+    # suppressor never sees it, and every such call waits this long.
+    CAPTURE_QUIET_SETTLE = 0.1
+
+    # Issues a command and captures its reply, from the first line matching
+    # start_pattern through the first line matching end_pattern.
+    #
+    # One state machine, run synchronously on the game thread by a downstream
+    # hook, decides both what is captured and (with quiet: true) what is hidden
+    # from the frontend. With quiet: true the call waits for up to
+    # {CAPTURE_QUIET_SETTLE} seconds for the end line to be hidden before it
+    # returns, so a slow hook between the two does not let the end line
+    # through unless it takes longer than that. The start line is also tested
+    # against end_pattern (with any prompt on its server string removed), so a
+    # reply that is sometimes one line and sometimes several needs no special
+    # casing.
+    #
+    # With use_fput, the capture restarts each time fput sends: on a refusal
+    # fput resends ("...wait", "you may only type ahead") or stands first
+    # ("struggle to stand"), so only the reply to the last send is captured,
+    # as before capture_command. Lines already hidden under quiet: true stay
+    # hidden.
+    #
+    # Lines are matched in the form the caller asked for: each server string
+    # with its line terminator removed, as the script's buffer holds it, with
+    # usexml: true; or each stripped text line with usexml: false. With
+    # usexml: false an end_pattern that contains "<" is taken as markup and
+    # is also matched against the raw server string of each line after the
+    # start line, so the default /<prompt/ ends a text-mode capture at the
+    # next prompt. Text mode relies on Lich::Common::Markup, which Lich loads
+    # at boot.
+    #
+    # Unrelated game output that arrives between the start and end lines is
+    # captured (and, with quiet: true, hidden) along with the reply.
+    #
+    # @param command [String] the command to send
+    # @param start_pattern [Regexp] marks the first line of the reply
+    # @param end_pattern [Regexp, Symbol] marks the last line of the reply;
+    #   :ignore captures the start line only
+    # @param include_end [Boolean] whether a separate end line is kept in the
+    #   result (a start line that is also the end line is always kept; a
+    #   text-mode capture that ends on a markup-only string has no end line)
+    # @param timeout [Numeric, nil] seconds to wait for the whole reply; a
+    #   reply, or the rest of one, arriving later is neither captured nor
+    #   hidden, and stays in the script's buffer. 0 or nil returns at once
+    #   (status :no_start), unlike the unlimited wait Timeout.timeout gave
+    #   those values before capture_command; the command is still sent, and
+    #   fput does not send it again once the time is up.
+    # @param silent [Boolean, nil] the script's silent flag for the duration
+    #   (nil: unchanged)
+    # @param usexml [Boolean] match and return raw XML (true) or stripped text
+    # @param quiet [Boolean] hide the reply, start through end line, from the
+    #   frontend (formatting state tags on hidden lines are still forwarded)
+    # @param use_fput [Boolean] send with fput (true) or put
+    # @return [CommandCapture]
+    def self.capture_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
+      single_line = end_pattern.eql?(:ignore)
+      # Stripped text never contains markup, so in text mode a markup
+      # end_pattern is also matched against the raw server string. A "<"
+      # that only opens a named group or lookbehind ("(?<") is not markup.
+      markup_end = !usexml && end_pattern.is_a?(Regexp) && end_pattern.source.gsub('(?<', '').include?('<')
+
+      script = Script.current
+      name = "Util::capture_command-#{SecureRandom.uuid}"
+      strip_key = name # private strip_xml multiline buffer; never "main"
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout.to_f
+      lock = Mutex.new
+      settled = ConditionVariable.new # signalled when the suppressor takes the flag
+      done = Queue.new
+      lines = []
+      marker = CAPTURE_END_MARKER.dup # replaced on every restart
+      phase = :waiting # -> :capturing -> :done, or -> :abandoned on timeout
+      suppress_current = false
+      # Lines just before the marker that cleanup leaves in the script's
+      # buffer: text lines that shared the end line's server string and
+      # follow it, or the lines of a string that arrived past the deadline.
+      keep_after_end = 0
+      marker_pushed = false # by the observer, for the current send
+
+      line_matches = lambda do |text, pattern|
+        !pattern.eql?(:ignore) && text.match?(pattern)
+      end
+
+      # Advance the state machine over one text line. Returns true when this
+      # line was part of the reply.
+      advance = lambda do |text|
+        case phase
+        when :waiting
+          return false unless text.match?(start_pattern)
+
+          lines << text.rstrip
+          phase = (single_line || line_matches.call(text.gsub(CAPTURE_PROMPT_TAG, ''), end_pattern)) ? :done : :capturing
+          true
+        when :capturing
+          if line_matches.call(text, end_pattern)
+            lines << text.rstrip if include_end
+            phase = :done
+          else
+            lines << text.rstrip
+          end
+          true
+        else
+          false
+        end
+      end
+
+      # Never raises: DownstreamHook.run removes a raising hook (and reports
+      # the error to the frontend), which would leave the caller to wait out
+      # the timeout with quiet output leaking.
+      # The lines the script's buffer received for one server string. XML:
+      # the string chomped (Script.new_downstream_xml), so a pattern anchored
+      # with $ behaves as it does against the buffer. Text: the lines the
+      # game thread decoded for the buffer (with the "main" strip_xml state,
+      # which a fresh decoder would not have mid-stream); a private decoder
+      # only when hooks run outside Game.
+      buffered_lines = lambda do |chunk|
+        if usexml
+          [chunk.chomp]
+        elsif (decoded = Thread.current[Lich::Common::Markup::DOWNSTREAM_TEXT_KEY]).is_a?(Array)
+          decoded
+        else
+          Lich::Common::Markup.strip_xml(chunk, type: strip_key).to_s.split("\r\n").reject(&:empty?)
+        end
+      end
+
+      observer = proc do |chunk|
+        lock.synchronize do
+          suppress_current = false
+          if %i[waiting capturing].include?(phase) && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+            # Past the deadline nothing more is matched or hidden, and what
+            # arrives from here on stays in the script's buffer: mark the
+            # boundary after this string, keeping its lines. A reply that
+            # completed in time stays complete.
+            begin
+              keep_after_end = buffered_lines.call(chunk).size
+            rescue StandardError
+              keep_after_end = 0
+            end
+            phase = :abandoned
+            script&.downstream_buffer&.push(marker)
+            marker_pushed = true
+            done << phase
+          end
+          if %i[waiting capturing].include?(phase)
+            begin
+              texts = buffered_lines.call(chunk)
+              was_capturing = phase == :capturing
+              in_reply = false
+              texts.each_with_index do |text, index|
+                next unless advance.call(text)
+
+                in_reply = true
+                keep_after_end = texts.size - index - 1 if phase == :done
+              end
+              # Only after the start line's server string, as the start
+              # line itself is never ended by a prompt riding on it.
+              phase = :done if markup_end && was_capturing && phase == :capturing && chunk.chomp.match?(end_pattern)
+              suppress_current = quiet && (was_capturing || in_reply)
+            rescue StandardError => e
+              Lich.log "error: Util.capture_command(#{command.inspect}): #{e.class}: #{e.message}"
+              phase = :error
+              keep_after_end = 0
+            end
+            if %i[done error].include?(phase)
+              # Also on :error, so a waiting fput reads a line and returns.
+              script&.downstream_buffer&.push(marker)
+              marker_pushed = true
+              done << phase
+            end
+          end
+        end
+        chunk
+      end
+
+      suppressor = proc do |chunk|
+        suppress = lock.synchronize do
+          s = suppress_current
+          suppress_current = false
+          settled.broadcast
+          s
+        end
+        suppress ? preserve_quiet_state_tags(chunk) : chunk
+      end
+
+      if script
+        save_script_silent = script.silent
+        save_want_downstream = script.want_downstream
+        save_want_downstream_xml = script.want_downstream_xml
+        script.silent = silent unless silent.nil?
+        script.want_downstream = !usexml
+        script.want_downstream_xml = usexml
+      end
+
+      completed = false
+      begin
+        DownstreamHook.add(name, observer, persist: false, priority: CAPTURE_OBSERVER_PRIORITY)
+        DownstreamHook.add("#{name}-quiet", suppressor, persist: false, priority: CAPTURE_SUPPRESSOR_PRIORITY) if quiet
+
+        remaining = -> { deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+        if use_fput && script
+          # fput calls on_send before every send, resends and 'stand'
+          # included, after clearing the script's buffer. Restart the capture
+          # there: whatever it matched so far answered an earlier send. The
+          # game thread can complete that earlier capture between fput's
+          # clear and this restart, leaving its marker in the buffer; remove
+          # it, or fput would read it as the reply to the next send, and take
+          # a fresh marker. fput is not interrupted when the capture
+          # completes, so a refusal that matched cannot cancel the resend.
+          # suppress_current is left for the suppressor of the chunk in
+          # flight, which may be the refusal itself.
+          restart = lambda do |_sent|
+            lock.synchronize do
+              next if %i[error abandoned].include?(phase)
+
+              stale = marker
+              script.downstream_buffer.delete_if { |line| line.equal?(stale) }
+              phase = :waiting
+              lines.clear
+              keep_after_end = 0
+              marker_pushed = false
+              marker = CAPTURE_END_MARKER.dup
+              done.clear
+              $strip_xml_multiline&.delete(strip_key)
+            end
+          end
+          sent = fput(command, timeout: [remaining.call, 0.001].max, interrupt: -> { remaining.call <= 0 },
+                               on_send: restart, failures: :symbol)
+          # Out of time before fput saw a reply to its last send (a roundtime
+          # longer than the timeout): anything captured answered a refusal.
+          # Its marker goes too, so cleanup removes everything up to now,
+          # unless the marker is the deadline boundary the observer set.
+          if sent == :interrupted
+            lock.synchronize do
+              unless phase == :error
+                unless phase == :abandoned
+                  stale = marker
+                  script.downstream_buffer.delete_if { |line| line.equal?(stale) }
+                  keep_after_end = 0
+                  marker_pushed = false
+                end
+                lines.clear
+                done.clear
+                phase = :abandoned
+              end
+            end
+          end
+        else
+          put(command)
+        end
+        # A guarded script is checked for cancellation while it waits, as
+        # Script#gets does; anything it raises reaches the ensure below.
+        guarded = script.respond_to?(:execution_guard_active?) && script.execution_guard_active?
+        outcome = nil
+        loop do
+          script.check_execution_guard! if guarded
+          left = [remaining.call, 0].max
+          outcome = done.pop(timeout: guarded ? [left, script.class::EXECUTION_GUARD_POLL_INTERVAL].min : left)
+          break if outcome || remaining.call <= 0
+        end
+        completed = outcome == :done
+      ensure
+        begin
+          if quiet
+            # The observer releases this thread from the top of the hook
+            # chain; give the suppressor at the bottom up to
+            # CAPTURE_QUIET_SETTLE to hide the line the observer flagged.
+            settle_until = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CAPTURE_QUIET_SETTLE
+            lock.synchronize do
+              while suppress_current && (left = settle_until - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
+                settled.wait(lock, left)
+              end
+            end
+          end
+        ensure
+          # Runs however the settle wait ends, an interrupt included.
+          DownstreamHook.remove(name)
+          DownstreamHook.remove("#{name}-quiet")
+          push_marker = false
+          status = lock.synchronize do
+            # The reply may have completed in the instant the wait timed out.
+            completed ||= phase == :done
+            failed = phase == :error
+            phase = :abandoned unless completed
+            suppress_current = false
+            # With the phase settled, the observer pushes no more markers.
+            push_marker = !marker_pushed
+            marker_pushed = true
+            if completed then :complete
+            elsif failed then :error
+            elsif lines.empty? then :no_start
+            else :no_end
+            end
+          end
+          $strip_xml_multiline&.delete(strip_key)
+          if script
+            begin
+              # Consume the reply from the script's own buffer, as the old
+              # get-loop did: atomically through the marker, keeping the
+              # lines counted in keep_after_end. The observer pushed it after
+              # the end line, or after the first string past the deadline;
+              # with neither, it goes on now and everything before it is
+              # removed. If the marker was evicted at capacity, what it
+              # bounded went with it and what remains came after it, so
+              # nothing is removed.
+              script.downstream_buffer.push(marker) if push_marker
+              script.downstream_buffer.shift_through(marker, keep: keep_after_end)
+            ensure
+              script.silent = save_script_silent unless silent.nil?
+              script.want_downstream = save_want_downstream
+              script.want_downstream_xml = save_want_downstream_xml
+            end
+          end
+        end
+      end
+      CommandCapture.new(lines: lock.synchronize { lines.dup }, status: status)
+    end
+
+    # Issues a command and returns its captured reply lines. See
+    # {capture_command} for the matching rules; use that method directly to
+    # tell a complete reply from a timed-out one.
+    #
+    # @param command [String] the command to send
+    # @param start_pattern [Regexp] marks the first line of the reply
+    # @param end_pattern [Regexp, Symbol] marks the last line of the reply;
+    #   :ignore captures the start line only
+    # @param include_end [Boolean] whether a separate end line is kept in the
+    #   result (a start line that is also the end line is always kept; a
+    #   text-mode capture that ends on a markup-only string has no end line)
+    # @param timeout [Numeric, nil] seconds to wait for the whole reply; 0 or
+    #   nil returns at once with an empty result (the command is still sent,
+    #   and its reply stays in the script's buffer)
+    # @param silent [Boolean, nil] the script's silent flag for the duration
+    #   (nil: unchanged)
+    # @param usexml [Boolean] match and return raw XML (true) or stripped text
+    # @param quiet [Boolean] hide the reply, start through end line, from the
+    #   frontend (formatting state tags on hidden lines are still forwarded)
+    # @param use_fput [Boolean] send with fput (true) or put
+    # @return [Array<String>] the captured lines (partial or empty on timeout)
+    def self.issue_command(command, start_pattern, end_pattern = /<prompt/, include_end: true, timeout: 5, silent: nil, usexml: true, quiet: false, use_fput: true)
+      capture_command(command, start_pattern, end_pattern, include_end: include_end, timeout: timeout, silent: silent,
+                                                           usexml: usexml, quiet: quiet, use_fput: use_fput).lines
     end
 
     def self.quiet_command_xml(command, start_pattern, end_pattern = /<prompt/, include_end = true, timeout = 5, silent = true)
