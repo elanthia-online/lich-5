@@ -16,7 +16,9 @@ validate_yaml_syntax() {
   while IFS= read -r file; do
     [[ -z "$file" ]] && continue
 
-    if ! ruby -e "require 'yaml'; YAML.load_file('$file')" >/dev/null 2>&1; then
+    # The file name goes in as an argument, never into the Ruby source: a
+    # curated PR chooses file names, and this job holds a write token.
+    if ! ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$file" >/dev/null 2>&1; then
       log_warn "file=$file::Potential YAML syntax issue in $file"
       ((++warnings))
     fi

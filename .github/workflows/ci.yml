@@ -125,6 +125,10 @@ jobs:
           bundler-cache: false
       - name: Run release packaging script tests
         run: bash .github/tests/test-bundle-default-scripts.sh
+      - name: Run beta pipeline script tests
+        run: |
+          bash .github/tests/test-next-beta-version.sh
+          bash .github/tests/test-curate-theirs.sh
 
   test:
     runs-on: ubuntu-latest
