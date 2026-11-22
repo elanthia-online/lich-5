@@ -722,6 +722,12 @@ test('composite reports absolute unscaled coordinates once, including modifiers 
   surface.getBoundingClientRect = () => ({ left: -30, top: -40, width: 200, height: 160 });
   surface.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, clientX: 10, clientY: 20, ctrlKey: true, shiftKey: true }));
   assert.deepEqual(sent.at(-1).payload, { x: 20, y: 30, button: 'primary', modifiers: ['ctrl', 'shift'] });
+  surface.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, clientX: 10, clientY: 20, metaKey: true }));
+  assert.deepEqual(sent.at(-1).payload, { x: 20, y: 30, button: 'primary', modifiers: ['meta'] });
+  surface.dispatchEvent(new dom.window.MouseEvent('click', {
+    bubbles: true, clientX: 10, clientY: 20, ctrlKey: true, shiftKey: true, altKey: true, metaKey: true
+  }));
+  assert.deepEqual(sent.at(-1).payload.modifiers, ['ctrl', 'shift', 'alt', 'meta']);
   const count = sent.length;
   view.querySelector('button').click();
   assert.equal(sent.length, count + 1);
