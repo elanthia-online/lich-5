@@ -1187,6 +1187,125 @@ test('an out-of-range number clamps to its bound on blur and at submit', t => {
   assert.deepEqual(sent.at(-1).submission, [100, 0], 'a submit without blur still sends in-range values');
 });
 
+test('a number typed past its bound reports the bound without changing the text', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.typeahead = ['change'];
+  const wrapper = dom.window.LichWebUI.render(page, {
+    type: 'number_input', cid: 'typeahead', props: { value: 0, min: 0, max: 100, step: 1 }, children: []
+  });
+  const control = wrapper.querySelector('input');
+  const type = text => { control.value = text; control.dispatchEvent(new dom.window.Event('input')); };
+  const values = () => sent.map(message => message.payload.value);
+  ['1', '15', '150'].forEach(type);
+  assert.deepEqual(values(), [1, 15, 100], 'typing past max sends max');
+  assert.equal(control.value, '150', 'the typed text is left alone');
+  type('1500');
+  assert.deepEqual(values(), [1, 15, 100], 'the same bound is not sent twice');
+  ['150', '15'].forEach(type);
+  assert.deepEqual(values(), [1, 15, 100, 15], 'backspacing into range sends the in-range value');
+  type('-5');
+  assert.deepEqual(values(), [1, 15, 100, 15, 0], 'typing below min sends min');
+  control.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(control.value, '0', 'blur settles the text on the value already sent');
+  assert.deepEqual(values(), [1, 15, 100, 15, 0], 'blur does not resend the bound');
+});
+
+test('a number short of its minimum is treated as a prefix and reports nothing', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.amount = ['change'];
+  const wrapper = dom.window.LichWebUI.render(page, {
+    type: 'number_input', cid: 'amount', props: { value: 25, min: 10, max: 500, step: 1 }, children: []
+  });
+  const control = wrapper.querySelector('input');
+  const type = text => { control.value = text; control.dispatchEvent(new dom.window.Event('input')); };
+  const values = () => sent.map(message => message.payload.value);
+  type('2');
+  assert.deepEqual(values(), [], 'a prefix below min sends nothing');
+  ['26', '6', '60', '600'].forEach(type);
+  assert.deepEqual(values(), [26, 60, 500], 'only in-range values and the overshoot past max are sent');
+  assert.equal(control.value, '600', 'the typed text is left alone');
+  type('-3');
+  assert.deepEqual(values(), [26, 60, 500, 10], 'an overshoot below min away from zero sends min');
+});
+
+test('a render echoing the bound a number field reported keeps the text being typed', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'typing' }] });
+  const frame = (generation, value) => ({ type: 'render', page: 'typing', generation,
+    bindings: { amount: ['change'] }, submissions: {},
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'amount', props: { value, min: 0, max: 100, step: 1 }, children: [] },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
+    ] } });
+  const field = () => dom.window.document.querySelector('input[type=number]');
+  const type = text => { field().value = text; field().dispatchEvent(new dom.window.Event('input')); };
+  receive(frame(1, 25));
+  field().focus();
+  type('150');
+  assert.deepEqual(sent.at(-1).payload, { value: 100 });
+  receive(frame(2, 100));
+  assert.equal(field().value, '150', 'the echo does not rewrite the typed text');
+  assert.equal(dom.window.document.activeElement, field(), 'the field keeps focus');
+  const before = sent.length;
+  type('1500');
+  assert.equal(sent.length, before, 'the replacement field does not resend the bound');
+  type('15');
+  assert.deepEqual(sent.at(-1).payload, { value: 15 });
+  receive(frame(3, 40));
+  assert.equal(field().value, '40', 'a different server value still replaces the text');
+});
+
+test('a maximum that sits on a decimal step is reported and kept exactly', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.rate = ['change'];
+  const wrapper = dom.window.LichWebUI.render(page, {
+    type: 'number_input', cid: 'rate', props: { value: 1, min: 1, max: 1.36, step: 0.01 }, children: []
+  });
+  const control = wrapper.querySelector('input');
+  const type = text => { control.value = text; control.dispatchEvent(new dom.window.Event('input')); };
+  type('1.36');
+  assert.deepEqual(sent.at(-1).payload, { value: 1.36 }, 'max itself is sent without rounding error');
+  control.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(control.value, '1.36', 'blur leaves a legal max alone');
+  type('1.5');
+  assert.equal(sent.length, 1, 'the bound for an overshoot is the max already sent');
+  control.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(control.value, '1.36', 'blur snaps an overshoot to the exact max');
+});
+
+test('a server value replaces number text when the field never sent that value', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'unbound' }] });
+  const frame = (generation, value) => ({ type: 'render', page: 'unbound', generation, bindings: {}, submissions: {},
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'amount', props: { value, min: 10, max: 500, step: 1 }, children: [] },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
+    ] } });
+  const field = () => dom.window.document.querySelector('input[type=number]');
+  receive(frame(1, 25));
+  field().focus();
+  for (const text of ['6', '60', '6']) { field().value = text; field().dispatchEvent(new dom.window.Event('input')); }
+  assert.equal(sent.filter(message => message.event === 'change').length, 0, 'a field without a change binding sends no change');
+  receive(frame(2, 60));
+  assert.equal(field().value, '60', 'the server value is not mistaken for an echo');
+});
+
+test('a maximum off its step bounds to the last step without binary residue', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.rate = ['change'];
+  const wrapper = dom.window.LichWebUI.render(page, {
+    type: 'number_input', cid: 'rate', props: { value: 0, min: 0, max: 0.35, step: 0.1 }, children: []
+  });
+  const control = wrapper.querySelector('input');
+  control.value = '0.5';
+  control.dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 0.3 }, 'the overshoot sends the last whole step');
+  control.dispatchEvent(new dom.window.Event('blur'));
+  assert.equal(control.value, '0.3', 'blur shows the same step');
+});
+
 test('the blur from replacing a number field during a render does not clamp a value being typed', t => {
   const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
   page.bindings.amount = ['change'];

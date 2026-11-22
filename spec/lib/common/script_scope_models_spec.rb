@@ -2047,6 +2047,23 @@ RSpec.describe 'bounded model, tree and combo compatibility' do
     )
   end
 
+  it 'delivers an in-range change at the maximum to a spin button once through value_changed' do
+    spin = gtk::SpinButton.new(0, 100, 1)
+    events = Queue.new
+    spin.signal_connect('value_changed') { events << [spin.value, spin.value_as_int, spin.text] }
+    _window, page = show(spin)
+    viewer = connect(page, 'a')
+
+    # Covers server delivery only: a change equal to the maximum is an
+    # ordinary in-range value and reaches the handler once.
+    send_event(page, viewer, :number_input, 'change', { value: 15 })
+    expect(events.pop(timeout: 2)).to eq([15, 15, '15'])
+    send_event(page, viewer, :number_input, 'change', { value: 100 })
+    expect(events.pop(timeout: 2)).to eq([100, 100, '100'])
+    drain_models
+    expect(events).to be_empty
+  end
+
   it 'reconciles only undelivered input changes before Save in the submitting viewer' do
     combo = gtk::ComboBoxText.new
     combo.append_text('First')
