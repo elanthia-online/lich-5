@@ -23,6 +23,17 @@ module Lich
       # form and the "(sitting)" short form shown when the HidePostStrings
       # option is on (issue #4529).
       SITTING = /who is sitting|\(sitting\)/i.freeze
+      # One player in the Saga-identity room players list:
+      # Goblin Bait <a exist="-10700002" noun="Aldric">Aldric</a>.
+      # Players carry negative exist ids and the noun is the bare name, so the
+      # name never has to be guessed from text. Since the post string is free text
+      # ("whose form wavers within a roiling cloud of grey smoke", "who is coated in
+      # soot and wrapped in a cloud of ash"), the text path cannot find where it
+      # ends.
+      PLAYER_LINK = %r{<a exist="-\d+" noun="(?<name>[^"]+)">[^<]*</a>}.freeze
+      # Any object link, removed before the text path reads a list it could not
+      # parse by its links.
+      LINK_TAG = %r{</?a\b[^>]*>}.freeze
       # Pattern for "You also see" prefix
       YOU_ALSO_SEE = /You also see/.freeze
       # Pattern for mount descriptions
@@ -123,14 +134,26 @@ module Lich
       end
     end
 
-    # Extract player names from room player string
-    # @param room_players [String] The room players string from game output
+    # Extract player names from room player string.
+    #
+    # On the Saga-identity stream every player is an object link, so names
+    # come from the links ({extract_linked_pcs}). A link-free list (the legacy
+    # stream) is split as text.
+    #
+    # @param room_players [String] The room players string from game output, links included
     # @param filter_pattern [Regexp, nil] Optional pattern to filter players (e.g., LYING_DOWN, SITTING)
     # @param status_pattern [Regexp] Pattern to remove status text (defaults to PLAYER_STATUS)
     # @return [Array<String>] List of player names
     def extract_pcs(room_players, filter_pattern: nil, status_pattern: DRDefsPattern::PLAYER_STATUS)
       return [] if room_players.nil? || room_players.empty?
 
+      linked = extract_linked_pcs(room_players)
+      unless linked.empty?
+        linked = linked.select { |_name, post| filter_pattern.match?(post) } if filter_pattern
+        return linked.map(&:first)
+      end
+
+      room_players = room_players.gsub(DRDefsPattern::LINK_TAG, '') if room_players.include?('</a>')
       players = normalize_trailing_and(room_players).split(', ')
       players = players.select { |obj| filter_pattern.match?(obj) } if filter_pattern
 
@@ -138,6 +161,30 @@ module Lich
         .map { |obj| obj.sub(status_pattern, '').sub(DRDefsPattern::PARENTHETICAL, '') }
         .map { |obj| obj.strip.scan(DRDefsPattern::PLAYER_NAME).first }
         .compact
+    end
+
+    # Reads the players of a Saga-identity room players list from their links.
+    #
+    # Each player's text runs from the end of their link to the start of the
+    # next player's link: their post string ("who is sitting", "(prone)") and
+    # then the separator and the next player's title. Nothing in that text can
+    # name a player, so a post string holding commas or " and " is harmless.
+    #
+    # @example
+    #   extract_linked_pcs('Goblin Bait <a exist="-1" noun="Aldric">Aldric</a> whose form wavers ' \
+    #                      'within a roiling cloud of grey smoke and <a exist="-2" noun="Brenna">Brenna</a>')
+    #   # => [["Aldric", " whose form wavers within a roiling cloud of grey smoke and "], ["Brenna", ""]]
+    # @param room_players [String] The room players string, links included
+    # @return [Array<Array(String, String)>] [name, text after the link] per player in list order;
+    #   empty when the string holds no player links
+    def extract_linked_pcs(room_players)
+      return [] unless room_players.include?('</a>')
+
+      links = room_players.to_enum(:scan, DRDefsPattern::PLAYER_LINK).map { Regexp.last_match }
+      links.each_with_index.map do |link, index|
+        stop = links[index + 1]&.begin(0) || room_players.length
+        [link[:name], room_players[link.end(0)...stop]]
+      end
     end
 
     # Finds all player names in the room.

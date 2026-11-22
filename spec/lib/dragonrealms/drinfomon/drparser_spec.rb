@@ -834,7 +834,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     let(:assigned) { {} }
 
     before do
-      %i[npcs dead_npcs room_objs pcs].each do |field|
+      %i[npcs dead_npcs room_objs pcs pcs_prone pcs_sitting].each do |field|
         allow(drroom_class).to receive(:"#{field}=") { |value| assigned[field] = value }
       end
       # parse calls the drdefs room helpers unqualified; production reaches them
@@ -911,6 +911,23 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
         expect(saga).to eq(legacy)
         expect(saga[:pcs]).to eq(%w[Aldric Brenna Corwin Delphine])
+      end
+
+      # The names come from the links on the server line; match_line has stripped
+      # them from the line the patterns see. Before the fix this line gave
+      # %w[smoke Brenna] (the post string's last word) and lost Delphine and
+      # Corwin behind the " and " inside the first post string.
+      it 'reads DRRoom.pcs from the links when post strings defeat the text split' do
+        line = "<component id='room players'>Also here: Goblin Bait <a exist=\"-10700002\" noun=\"Aldric\">Aldric</a> " \
+               "whose form wavers within a roiling cloud of grey smoke, Daydreamer <a exist=\"-10700003\" noun=\"Brenna\">Brenna</a> " \
+               "who is coated in soot and wrapped in a cloud of ash, <a exist=\"-10700005\" noun=\"Delphine\">Delphine</a> (prone) " \
+               "and Druid <a exist=\"-10700004\" noun=\"Corwin\">Corwin</a> who is sitting.</component>"
+
+        expect(parse_room(line)).to eq(pcs: %w[Aldric Brenna Delphine Corwin], pcs_prone: ['Delphine'], pcs_sitting: ['Corwin'])
+      end
+
+      it 'clears pcs_prone and pcs_sitting with pcs when the room empties' do
+        expect(parse_room("<component id='room players'></component>")).to eq(pcs: [], pcs_prone: [], pcs_sitting: [])
       end
     end
 

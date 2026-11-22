@@ -765,7 +765,12 @@ module Lich
             end
           elsif Pattern::RoomPlayersEmpty.match?(line)
             DRRoom.pcs = []
+            DRRoom.pcs_prone = []
+            DRRoom.pcs_sitting = []
           elsif (match = line.match(Pattern::RoomPlayers))
+            # The drdefs helpers read player names from the object links, which
+            # match_line has stripped from +line+, so hand them the server's list.
+            match = server_line.match(Pattern::RoomPlayers) || match unless line.equal?(server_line)
             players = match[:players]&.dup || ''
             DRRoom.pcs = find_pcs(players)
             DRRoom.pcs_prone = find_pcs_prone(players)
