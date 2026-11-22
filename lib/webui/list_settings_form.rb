@@ -92,12 +92,12 @@ module Lich
 
       # Row keys are positional and a rendered selection never replaces a viewer's own,
       # so the acting viewer's highlight is cleared along with the form's selection.
-      # Only a table on the current render is addressed. A refused write, such as
-      # for a viewer that has left, has nothing to clear and never stops the refresh.
+      # A refused write, such as for a disconnected viewer, which keeps its own
+      # selection if it resumes, is skipped and never stops the refresh.
       # @return [void]
       def clear_viewer_selection(key, event)
         table = @tables[key]
-        return unless table && @page.last_render.tree.each.any? { |node| node.cid == table.cid }
+        return unless table
 
         @page.set(table.cid, :selected, [], viewer: event.viewer_id)
       rescue Error
