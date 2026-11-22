@@ -1388,6 +1388,138 @@ test('a render while focused keeps the precise number of a field the user has no
   assert.deepEqual(sent.at(-1).payload, { value: 2.85 }, 'the step starts from the precise value');
 });
 
+test('a render while focused keeps typed number text and blur formats it', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'typing' }] });
+  const frame = generation => ({ type: 'render', page: 'typing', generation,
+    bindings: { spin: ['change'], save: ['activate'] }, submissions: { save: ['spin'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { value: 2.5, min: 0, max: 100, step: 0.1, digits: 1,
+        snap_to_step: false } },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } },
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  receive(frame(1));
+  let input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '50.25';
+  input.dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 50.25 });
+  receive(frame(2));
+  input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(dom.window.document.activeElement, input, 'the render returns focus to the field');
+  assert.equal(input.value, '50.25', 'the typed text is not rounded while the field has focus');
+  input.blur();
+  assert.equal(input.value, '50.3', 'blur shows display precision');
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [50.25], 'the typed value is sent, not the rounded text');
+});
+
+test('a focused number keeps typed text over its own echo and yields to a server change', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'echo' }] });
+  const frame = (generation, value) => ({ type: 'render', page: 'echo', generation,
+    bindings: { spin: ['change'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { value, min: 0, max: 100, step: 0.1, digits: 1,
+        snap_to_step: false } }
+    ] } });
+  receive(frame(1, 2.5));
+  let input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '50.25';
+  input.dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 50.25 });
+  receive(frame(2, 50.25));
+  input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(input.value, '50.25', 'the echo of the typed value leaves the text as typed');
+  input.value = '50.257';
+  input.dispatchEvent(new dom.window.Event('input'));
+  receive(frame(3, 7.25));
+  input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(dom.window.document.activeElement, input);
+  assert.equal(input.value, '7.3', 'a different server value replaces the typed text');
+});
+
+test('a focused number recognizes its own echo after an unrelated render', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'late' }] });
+  const frame = (generation, value) => ({ type: 'render', page: 'late', generation,
+    bindings: { spin: ['change'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { value, min: 0, max: 100, step: 0.1, digits: 1,
+        snap_to_step: false } },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
+    ] } });
+  const field = () => dom.window.document.querySelector('input[type=number]');
+  receive(frame(1, 2.5));
+  field().focus();
+  field().value = '50.25';
+  field().dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 50.25 });
+  receive(frame(2, 2.5));
+  receive(frame(3, 2.5));
+  assert.equal(field().value, '50.25', 'unrelated renders keep the typed text');
+  receive(frame(4, 50.25));
+  assert.equal(dom.window.document.activeElement, field());
+  assert.equal(field().value, '50.25', 'the late echo of the typed value leaves the text as typed');
+  receive(frame(5, 50.25));
+  assert.equal(field().value, '50.25', 'renders after the echo keep the typed text');
+  receive(frame(6, 7.25));
+  assert.equal(field().value, '7.3', 'a server value other than the last report replaces the text');
+});
+
+test('typed number text takes display precision when a render does not return focus', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'locked' }] });
+  const frame = (generation, props) => ({ type: 'render', page: 'locked', generation,
+    bindings: { spin: ['change'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { min: 0, max: 100, step: 0.1, digits: 1,
+        snap_to_step: false, ...props } }
+    ] } });
+  receive(frame(1, { value: 2.5 }));
+  let input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '50.25';
+  input.dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 50.25 });
+  receive(frame(2, { value: 50.25, disabled: true }));
+  input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(input.disabled, true);
+  assert.notEqual(dom.window.document.activeElement, input, 'a disabled field does not get focus back');
+  assert.equal(input.value, '50.3', 'the unfocused field shows display precision');
+});
+
+test('a render while focused keeps the typed text of a number without display precision', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'plain' }] });
+  const frame = generation => ({ type: 'render', page: 'plain', generation,
+    bindings: { count: ['change'], save: ['activate'] }, submissions: { save: ['count'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'count', props: { value: 2, min: 0, max: 100, step: 0.01 } },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } },
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  receive(frame(1));
+  let input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '5.0';
+  input.dispatchEvent(new dom.window.Event('input'));
+  assert.deepEqual(sent.at(-1).payload, { value: 5 });
+  receive(frame(2));
+  input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(dom.window.document.activeElement, input, 'the render returns focus to the field');
+  assert.equal(input.value, '5.0', 'the typed text is kept so the next digit lands where it was typed');
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [5]);
+});
+
 test('a number clamps to the highest legal step when max is off-step', t => {
   const { dom, receive, sent } = fixture();
   t.after(() => dom.window.close());
