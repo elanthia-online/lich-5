@@ -343,12 +343,17 @@ module Lich
         end
 
         # Scripts run in the Lich process, not the viewer's browser, so they
-        # cannot reach the system clipboard. Copies are dropped and logged
-        # once; reads return nil, as GTK does for an empty clipboard.
+        # cannot reach the system clipboard. Copies are refused, so a script
+        # never reports a copy that did not happen; reads return nil, as GTK
+        # does for an empty clipboard.
         class Clipboard
           # @param _selection [Symbol] Gdk::Selection value, ignored
           # @return [Clipboard] an owner-bound clipboard stand-in
           def self.get(_selection = nil) = new
+
+          # @param _display [Object, nil] Gdk::Display value, ignored
+          # @return [Clipboard] an owner-bound clipboard stand-in
+          def self.get_default(_display = nil) = new
 
           def initialize
             @session = Gtk.session
@@ -356,10 +361,9 @@ module Lich
           end
 
           # @param _text [String] text the script asked to copy
-          # @return [Clipboard] self
+          # @raise [UnsupportedOperation] always; the system clipboard is not available to scripts
           def set_text(_text, *)
-            @session.degrade(:clipboard, 'the system clipboard is not available to scripts; copied text is dropped', receiver: self)
-            self
+            @session.refuse(self, :set_text)
           end
           alias text= set_text
 

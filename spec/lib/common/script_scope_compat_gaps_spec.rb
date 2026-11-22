@@ -399,6 +399,20 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(events.drop(5)).to eq(%i[window_show window_map map])
   end
 
+  it 'runs a window show handler once when the handler shows the window again' do
+    %i[show show_all].each do |again|
+      window = gtk::Window.new
+      window.add(gtk::Label.new('content'))
+      runs = 0
+      window.signal_connect('show') do
+        runs += 1
+        window.public_send(again)
+      end
+      expect { window.show_all }.not_to raise_error
+      expect([again, runs, window.visible?, window.mapped?]).to eq([again, 1, true, true])
+    end
+  end
+
   it 'blocks a main loop until quit, and refuses a nested run' do
     loop = scope.const_get(:GLib, false)::MainLoop.new
     quitter = Thread.new do
@@ -435,11 +449,22 @@ RSpec.describe 'legacy GTK calls that scripts use outside the widget catalog' do
     expect(loop.quit).to be_nil
   end
 
-  it 'drops clipboard copies and reports an empty clipboard' do
+  it 'refuses clipboard copies, so a rescuing caller falls back, and reports an empty clipboard' do
     gdk = scope.const_get(:Gdk, false)
-    clipboard = gtk::Clipboard.get(gdk::Selection::CLIPBOARD)
-    expect(clipboard.set_text('copied')).to equal(clipboard)
-    expect(clipboard.wait_for_text).to be_nil
+    clipboards = [gtk::Clipboard.get(gdk::Selection::CLIPBOARD), gtk::Clipboard.get_default(gdk::Display.default)]
+    expect(clipboards).to all(be_a(gtk::Clipboard))
+    clipboards.each do |clipboard|
+      expect { clipboard.set_text('copied') }.to raise_error(gtk::UnsupportedOperation, /operation=set_text/)
+      expect { clipboard.text = 'copied' }.to raise_error(gtk::UnsupportedOperation, /operation=set_text/)
+      expect(clipboard.wait_for_text).to be_nil
+    end
+    outcome = begin
+      gtk::Clipboard.get(gdk::Selection::CLIPBOARD).set_text('copied')
+      :copied
+    rescue StandardError
+      :fallback
+    end
+    expect(outcome).to eq(:fallback)
   end
 
   it 'resolves require pango to the compatibility layer while it presents' do

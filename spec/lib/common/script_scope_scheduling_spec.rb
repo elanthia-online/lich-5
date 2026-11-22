@@ -81,8 +81,10 @@ RSpec.describe 'owner-bound GLib scheduling' do
       refused << e.message
     end
     expect(refused.pop(timeout: 2)).to match(/operation=run/)
-    glib::Idle.add { loop.quit; false }
-    expect(loop.run).to be_nil
+    # The idle re-arms until the run has started, so its quit cannot land
+    # before the run it is meant to end.
+    glib::Idle.add { loop.running? ? (loop.quit; false) : true }
+    expect(Timeout.timeout(5) { loop.run }).to be_nil
     closer = Thread.new do
       sleep 0.05 until loop.running?
       gtk.session.close

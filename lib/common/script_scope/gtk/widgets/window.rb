@@ -372,10 +372,13 @@ module Lich
                   set_focus(target) if ancestor.equal?(self)
                 end
               end
+              changed = !@shown
               @shown = true
               # The window and the widgets presented with it realize, then the
-              # window's show handlers run, then each of them maps.
-              refresh_mapped { emit_handlers(:show) unless destroyed? }
+              # window's show handlers run, then each of them maps. A show
+              # handler that shows the window again finds it shown already, so
+              # the handlers run once for each change to shown.
+              refresh_mapped { emit_handlers(:show) if changed && !destroyed? }
             end
             self
           end
