@@ -735,6 +735,27 @@ test('composite reports absolute unscaled coordinates once, including modifiers 
   assert.equal(sent.at(-1).payload.region, 'room-7');
 });
 
+test('composite Cmd click on an activating region reaches the surface with the meta modifier', t => {
+  const { dom, page, sent } = fixture(); t.after(() => dom.window.close());
+  page.bindings.map = ['surface_activate', 'region_activate'];
+  const view = dom.window.LichWebUI.render(page, {
+    type: 'composite', cid: 'map', props: { width: 100, height: 80, scale: 2, surface_events: true,
+      layers: [{ kind: 'region', key: 'room-7', x1: 10, y1: 12, x2: 20, y2: 22, label: 'Room seven', activates: true }] }
+  });
+  const surface = view.querySelector('.composite-surface');
+  surface.getBoundingClientRect = () => ({ left: -30, top: -40, width: 200, height: 160 });
+  const count = sent.length;
+  // A modified click belongs to the surface so scripts can bind it; the region must let it through.
+  view.querySelector('button').dispatchEvent(new dom.window.MouseEvent('click', {
+    bubbles: true, clientX: 10, clientY: 20, metaKey: true
+  }));
+  const emitted = sent.slice(count);
+  assert.equal(emitted.some(message => message.event === 'region_activate'), false);
+  assert.equal(emitted.length, 1);
+  assert.equal(emitted[0].event, 'surface_activate');
+  assert.deepEqual(emitted[0].payload, { x: 20, y: 30, button: 'primary', modifiers: ['meta'], region: 'room-7' });
+});
+
 test('log and overlay render literal text and layered children without HTML execution', t => {
   const { dom, page } = fixture(); t.after(() => dom.window.close());
   const log = dom.window.LichWebUI.render(page, {
