@@ -5,6 +5,7 @@ require_relative '../../support/webui_shim_bindings'
 require 'pp'
 require 'yaml'
 require 'tmpdir'
+require 'timeout'
 require_relative '../../../lib/common/script_scope'
 
 RSpec.describe 'session credential inspection boundary' do
@@ -48,6 +49,21 @@ RSpec.describe 'session credential inspection boundary' do
     { window: window, box: box, label: label, button: button }
   end
 
+  # Attaches a viewer through the runtime and returns the resume token it was sent.
+  def attach_viewer(page)
+    sent = []
+    connection = double('boundary viewer', viewer_id: 'boundary-viewer-5c1e', alive?: true)
+    allow(connection).to receive(:send_text) { |json| sent << JSON.parse(json) }
+    service.runtime.handle(connection, type: 'attach', page: service.registry.address_for(page))
+    sent.filter_map { |message| message['resume'] }.first
+  end
+
+  def native_page
+    service.registry.register(Lich::WebUI::Page.new(owner: owner, id: 'boundary', title: 'Boundary') do
+      password_input(key: 'password')
+    end)
+  end
+
   it 'keeps the session token out of every rendering of shim widgets and their collections' do
     built = widgets
     expect(session_token).to match(/\A\h{64}\z/)
@@ -56,6 +72,99 @@ RSpec.describe 'session credential inspection boundary' do
     subjects.each do |subject|
       renderings(subject).each { |text| expect(text).not_to include(session_token) }
     end
+  end
+
+  it 'keeps session and resume tokens out of a shown window with an attached viewer' do
+    built = widgets
+    built[:window].show_all
+    page = nil
+    Timeout.timeout(2) { sleep 0.001 until (page = service.registry.pages_for(owner).first)&.last_render }
+    resume_token = attach_viewer(page)
+    expect(resume_token).to match(/\Aresume-\h{32}\z/)
+
+    (built.values + [built]).each do |subject|
+      renderings(subject).each do |text|
+        expect(text).not_to include(session_token)
+        expect(text).not_to include(resume_token)
+        expect(text).not_to include('boundary-viewer-5c1e')
+        expect(text).not_to include('Adapter::Node')
+      end
+    end
+  end
+
+  it 'keeps session and resume tokens out of a native page with an attached viewer' do
+    page = native_page
+    resume_token = attach_viewer(page)
+    expect(resume_token).to match(/\Aresume-\h{32}\z/)
+
+    renderings(page).each do |text|
+      expect(text).not_to include(session_token)
+      expect(text).not_to include(resume_token)
+      expect(text).not_to include('boundary-viewer-5c1e')
+    end
+  end
+
+  %i[runtime modals].each do |reader|
+    it "keeps session and resume tokens out of the service #{reader} with an attached viewer" do
+      resume_token = attach_viewer(native_page)
+      expect(resume_token).to match(/\Aresume-\h{32}\z/)
+
+      renderings(service.public_send(reader)).each do |text|
+        expect(text).not_to include(session_token)
+        expect(text).not_to include(resume_token)
+      end
+    end
+  end
+
+  %i[runtime modals].each do |reader|
+    it "keeps a queued attach reply's resume token out of the service #{reader}" do
+      page = native_page
+      near, far = UNIXSocket.pair
+      connection = Lich::WebUI::Server::Connection.new(near, thread_factory: ->(&_writer) {})
+      service.runtime.handle(connection, type: 'attach', page: service.registry.address_for(page))
+      resume_token = connection.instance_variable_get(:@queue).join[/resume-\h{32}/]
+      expect(resume_token).not_to be_nil
+
+      renderings(service.public_send(reader)).each do |text|
+        binary = text.scan(/!binary \|-?\n((?:[ \t]+\S+\n)+)/).map { |(encoded)| encoded.unpack1('m') }
+        expect(text).not_to include(resume_token)
+        expect(binary.join).not_to include(resume_token)
+      end
+      expect(connection.inspect).to eq(
+        "#<Lich::WebUI::Server::Connection viewer_id=#{connection.viewer_id.inspect} alive=true>"
+      )
+    ensure
+      [near, far].each { |socket| socket&.close }
+    end
+  end
+
+  it 'renders the viewer store and an attachment without the resume token' do
+    page = native_page
+    resume_token = attach_viewer(page)
+    store = service.runtime.instance_variable_get(:@viewers)
+    attachment = store.attachments_for(page).first
+    expect(attachment.resume_token).to eq(resume_token)
+
+    [store, attachment, [attachment]].each do |subject|
+      renderings(subject).each { |text| expect(text).not_to include(resume_token) }
+    end
+    expect(store.inspect).to eq('#<Lich::WebUI::ViewerStore attachments=1>')
+    expect(attachment.inspect).to eq(
+      "#<Lich::WebUI::ViewerStore::Attachment viewer_id=#{attachment.viewer_id.inspect} resume_state=:fresh>"
+    )
+  end
+
+  it 'keeps a native password input value out of every rendering of its component' do
+    input = Lich::WebUI::Component.new(
+      type: :password_input, cid: 'password_input:master',
+      props: { label: 'Password', value: 'canary-boundary-91fe', sensitive: true }
+    )
+    parent = Lich::WebUI::Component.new(type: :group, cid: 'group:0', props: {}, children: [input])
+
+    [input, parent, [input], { nested: parent }].each do |subject|
+      renderings(subject).each { |text| expect(text).not_to include('canary-boundary-91fe') }
+    end
+    expect(input.props[:value]).to eq('canary-boundary-91fe')
   end
 
   it 'keeps widget class names in the rendering for debugging' do

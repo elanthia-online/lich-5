@@ -52,6 +52,15 @@ module Lich
         # @api private
         def inspect = '#<Lich::WebUI::Adapter::Handle opaque>'
         alias to_s inspect
+
+        # Serializes as the same opaque summary as inspect, so YAML never walks
+        # the node, page and viewer state behind the token.
+        # @param coder [Psych::Coder] coder receiving the scalar
+        # @return [void]
+        # @api private
+        def encode_with(coder)
+          coder.scalar = inspect
+        end
       end
       private_constant :Handle
 

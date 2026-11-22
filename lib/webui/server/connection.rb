@@ -41,6 +41,22 @@ module Lich
         # @return [Boolean]
         def alive? = @alive
 
+        # Names this transport by class, viewer id and liveness only. The default
+        # inspect would print the socket and every queued outbound frame, including
+        # an attach reply's resume token. Ruby's pp prints through it too.
+        # @return [String] bounded inspection text
+        def inspect
+          "#<#{self.class.name} viewer_id=#{viewer_id.inspect} alive=#{@alive.inspect}>"
+        end
+
+        # Serializes as the same opaque summary as inspect, so YAML never prints
+        # the queued frames or walks the socket behind it.
+        # @param coder [Psych::Coder] coder receiving the scalar
+        # @return [void]
+        def encode_with(coder)
+          coder.scalar = inspect
+        end
+
         # Queues a text message using the transport's bounded fragmentation encoder.
         # Outbound messages share the render budget (Protocol::MAX_RENDER_BYTES),
         # not the 2 MiB client message budget.
