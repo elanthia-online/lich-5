@@ -401,13 +401,7 @@ module Lich
         # @param version_file_path [String] path to version.rb
         # @return [String, nil] version string or nil
         def extract_version_from_file(version_file_path)
-          return nil unless File.exist?(version_file_path)
-
-          version_file_content = File.read(version_file_path)
-          if version_file_content =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/
-            return $1
-          end
-          nil
+          SnapshotManager.declared_version(version_file_path)
         end
 
         private

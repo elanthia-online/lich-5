@@ -4,17 +4,20 @@
   Snapshot and rollback functionality for Lich core files.
 
   Creates timestamped backups of lib/, lich.rbw, and core scripts before
-  updates. Supports rollback to the most recent snapshot of a stable
-  release. #snapshot, #revert and #restore_from describe how each leaves the
-  installation as it was when it fails.
+  updates, with copies of Gemfile and LICENSE. Supports rollback to the
+  most recent snapshot of a stable release; #revert restores lib/,
+  lich.rbw and the core scripts, not the top-level files (see
+  #copy_top_level_files). #snapshot, #revert and #restore_from describe
+  how each leaves the installation as it was when it fails.
 
   A revert whose thread is killed (Lich shutting down) undoes the swap like
   a failed one. A revert whose process is killed during the swap cannot
   undo it. It can leave lib/, the core scripts or lich.rbw missing, so that
   Lich will not start and cannot run the revert again. The snapshot itself
-  is untouched: copying its lib/, the core scripts in its scripts/ and its
-  lich.rbw back by hand, or running the revert from another session of this
-  installation that is still running, restores it. On Windows each rename
+  is untouched: copying its lib/, the core scripts in its scripts/, its
+  lich.rbw and any Gemfile and LICENSE it has back by hand, or running
+  the revert from another session of this installation that is still
+  running, restores it. On Windows each rename
   of the swap that Windows refuses keeps this window open for up to about 3
   seconds while it is retried; Lich says so while it waits.
 =end
@@ -25,6 +28,59 @@ module Lich
   module Util
     module Update
       class SnapshotManager
+        # A LICH_VERSION assigned a string literal: the only form #revert
+        # reads, as it never runs a snapshot's code.
+        # Anchored to the start of a line, so a comment that mentions an
+        # assignment (e.g. "# Example: LICH_VERSION = '6.0.0'") is not read
+        # in place of the real one. Every lib/version.rb in lich-5's history
+        # assigns it at the start of a line.
+        LICH_VERSION_PATTERN = /^[ \t]*LICH_VERSION[ \t]*=[ \t]*['"]([^'"\n]+)['"]/.freeze
+        # UTF-8 byte-order mark. Ruby skips one at the start of a file and
+        # runs the rest, so the reader must too, or an assignment on line 1
+        # behind it is not at the start of a line.
+        UTF8_BOM = [0xEF, 0xBB, 0xBF].pack('C*').freeze
+        # The pattern main used, which also reads forms some forks' version
+        # files use and LICH_VERSION_PATTERN does not: an assignment split
+        # across lines, and a qualified constant (::LICH_VERSION). Only used
+        # when LICH_VERSION_PATTERN finds nothing, so snapshots main restores
+        # are still restored.
+        LEGACY_LICH_VERSION_PATTERN = /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/.freeze
+
+        # Reads the version a version.rb declares, without running it. Shared
+        # with ReleaseInstaller#extract_version_from_file, so a tree an
+        # update accepts has a version #revert can read from its snapshot.
+        # An assignment at the start of a line is read first; failing that,
+        # the first match of LEGACY_LICH_VERSION_PATTERN.
+        #
+        # @param version_file [String] path to a version.rb
+        # @return [String, nil] the declared LICH_VERSION, or nil when the
+        #   file is missing, unreadable or does not assign it a literal
+        def self.declared_version(version_file)
+          content = File.binread(version_file)
+          version_assignments(content).first ||
+            without_bom(content)[LEGACY_LICH_VERSION_PATTERN, 1]&.dup&.force_encoding(Encoding::UTF_8)
+        rescue SystemCallError
+          nil
+        end
+
+        # @param content [String] a file's bytes
+        # @return [String] the bytes, binary, without a leading UTF-8
+        #   byte-order mark
+        def self.without_bom(content)
+          content = content.b
+          content.start_with?(UTF8_BOM) ? content.byteslice(UTF8_BOM.bytesize..) : content
+        end
+
+        # Every LICH_VERSION assigned a string literal at the start of a
+        # line in a version.rb's bytes, in file order, after a leading
+        # byte-order mark. BranchInstaller requires exactly one.
+        #
+        # @param content [String] the file's bytes
+        # @return [Array<String>] the assigned values, UTF-8
+        def self.version_assignments(content)
+          without_bom(content).scan(LICH_VERSION_PATTERN).map { |(value)| value.dup.force_encoding(Encoding::UTF_8) }
+        end
+
         CORE_SCRIPTS = %w[
           alias.lic autostart.lic dependency.lic ewaggle.lic foreach.lic
           go2.lic infomon.lic jinx.lic lnet.lic log.lic logxml.lic
@@ -104,7 +160,8 @@ module Lich
           Dir.mktmpdir("L5-databackup-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}-", BACKUP_DIR)
         end
 
-        # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
+        # Creates timestamped snapshot of lib/, lich.rbw, core scripts and the
+        # top-level files an update overwrites (see #copy_top_level_files).
         #
         # The copies go into a staging directory under BACKUP_DIR whose name
         # #revert ignores. Only once every copy has succeeded is
@@ -356,6 +413,7 @@ module Lich
         # @return [void]
         def copy_core_files(dest)
           FileUtils.cp(File.join(LICH_DIR, lich_file_name), File.join(dest, lich_file_name))
+          copy_top_level_files(dest)
 
           dest_lib = File.join(dest, 'lib')
           FileUtils.mkdir_p(dest_lib)
@@ -367,6 +425,38 @@ module Lich
           CORE_SCRIPTS.each do |file|
             source = File.join(SCRIPT_DIR, file)
             FileUtils.cp(source, File.join(dest, 'scripts', file)) if File.exist?(source)
+          end
+        end
+
+        # Top-level files a snapshot keeps: those an update overwrites
+        # (ReleaseInstaller::TOP_LEVEL_FILES) except Gemfile.lock. Lich's
+        # release and branch archives do not contain a lock file
+        # (.gitattributes export-ignores it), so an update never replaces
+        # one, and it is neither kept nor put back.
+        # (A literal, as this file loads before ReleaseInstaller.)
+        SNAPSHOT_TOP_LEVEL_FILES = %w[Gemfile LICENSE].freeze
+
+        # Copies SNAPSHOT_TOP_LEVEL_FILES (Gemfile, LICENSE) into +dest+, so
+        # the ones from before an update survive it. Lich
+        # checks its gems against the Gemfile at startup. #revert does not
+        # restore them: after a restart, --revert runs the code of whatever
+        # was installed, which may not know about them, so they are kept for
+        # restoring by hand (see the note at the top of this file).
+        #
+        # Only a regular file that can be read is copied (through a link, its
+        # target's bytes). A directory, a dangling link or an unreadable file
+        # is skipped, so a snapshot that succeeded before these files were
+        # copied still succeeds.
+        #
+        # @param dest [String] snapshot directory being filled
+        # @return [void]
+        # @api private
+        def copy_top_level_files(dest)
+          SNAPSHOT_TOP_LEVEL_FILES.each do |file|
+            source = File.join(LICH_DIR, file)
+            next unless File.file?(source) && File.readable?(source)
+
+            FileUtils.cp(source, File.join(dest, file))
           end
         end
 
@@ -636,10 +726,7 @@ module Lich
         # @param dir [String] snapshot directory
         # @return [String, nil] LICH_VERSION declared by dir/lib/version.rb
         def snapshot_version(dir)
-          content = File.binread(File.join(dir, 'lib', 'version.rb'))
-          content =~ /LICH_VERSION\s*=\s*['"]([^'"]+)['"]/ ? $1 : nil
-        rescue SystemCallError
-          nil
+          self.class.declared_version(File.join(dir, 'lib', 'version.rb'))
         end
 
         # Whether a snapshot holds a prerelease of Lich (5.26.0-beta.1), going

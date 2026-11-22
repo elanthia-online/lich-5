@@ -109,7 +109,9 @@ module Lich
         case type
         when /^(?:--announce|-a)\b/
           release_installer.announce
-        when /^--branch=(.+)$/
+        # (.*), not (.+): an empty --branch= reaches the installer's usage text
+        # instead of being reported as an unknown option.
+        when /^--branch=(.*)$/
           branch_installer.download_branch_update($1)
         when /^--(?:beta|test)\s+(?:--)?confirm\s*$/
           release_installer.confirm_betatest
@@ -201,7 +203,7 @@ module Lich
     --help                   Display this message
     --announce               Get summary of changes for next version
     --update                 Update all changes for next version
-    --branch=<name>          Update to a specific GitHub branch
+    --branch=<name>          Update to a specific GitHub branch (also owner:name, owner/repo:name)
     --status                 Show current version and branch tracking info
     --snapshot               Grab current snapshot of Lich5 ecosystem and put in backup
     --revert                 Roll the Lich5 ecosystem back to the last installed stable release
@@ -258,6 +260,8 @@ module Lich
     #{$clean_lich_char}lich5-update --branch=main               Update to the main stable branch
     #{$clean_lich_char}lich5-update --branch=some_branch_name   Update to a different branch
     #{$clean_lich_char}lich5-update --branch=owner:branch_name  Update to a fork's branch
+    #{$clean_lich_char}lich5-update --branch=elanthia-online/repo:branch_name
+                                              Update to a branch of another elanthia-online repo
 
     *NOTE* Script repos sync automatically on login for both DR and GS.
     "
