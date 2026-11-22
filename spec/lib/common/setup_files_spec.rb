@@ -546,4 +546,269 @@ RSpec.describe Lich::Common::SetupFiles do
       setup_files.send(:safe_log, 'test log')
     end
   end
+
+  # Script#kill stops a script's threads with Thread#kill. On Ruby 4.0 a thread
+  # killed inside Dir.glob or File.open can leak the descriptor: no Ruby object
+  # owns it yet, so GC never closes it. A character whose loop stopped a script
+  # while it was still loading its settings leaked one scripts/profiles handle
+  # per stop, about 1,000 in four hours, until the process hit its open-files
+  # limit (1024) and every script start failed with "Too many open files".
+  # #load_files defers interrupts until its scan is done.
+  describe 'interrupt safety of #load_files (private)' do
+    let(:entered) { Queue.new }
+    let(:release) { Queue.new }
+    let(:loader_threads) { [] }
+
+    # Starts a background thread the way a script runs: exceptions surface
+    # through #value / #join instead of being printed.
+    def spawn_loader(&block)
+      thread = Thread.new(&block)
+      thread.report_on_exception = false
+      loader_threads << thread
+      thread
+    end
+
+    # Makes the first Dir.glob of the profiles scan block until the spec pushes
+    # to `release`, and reports it on `entered`. Later globs pass through.
+    def block_profiles_glob
+      blocked = false
+      allow(Dir).to receive(:glob).and_wrap_original do |original, pattern, *args, **kwargs|
+        if !blocked && pattern.to_s.start_with?(profiles_dir)
+          blocked = true
+          entered << pattern
+          release.pop
+        end
+        original.call(pattern, *args, **kwargs)
+      end
+    end
+
+    def wait_until_inside_scan
+      expect(entered.pop(timeout: 5)).not_to be_nil, 'loader thread never reached Dir.glob'
+    end
+
+    def wait_until_sleeping(thread)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      sleep 0.001 until thread.status == 'sleep' || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      expect(thread.status).to eq('sleep')
+    end
+
+    after do
+      release.close
+      loader_threads.each do |thread|
+        thread.kill
+        begin
+          thread.join(5)
+        rescue StandardError
+          nil # a deferred Thread#raise surfaces here; the example already checked it
+        end
+      end
+    end
+
+    context 'with an interrupt that arrives inside the directory scan' do
+      before do
+        File.write(File.join(profiles_dir, 'base.yaml'), { version: 1 }.to_yaml)
+        File.write(File.join(profiles_dir, 'TestChar-setup.yaml'), { hometown: 'Crossing' }.to_yaml)
+        block_profiles_glob
+      end
+
+      it 'defers Thread#kill until the scan returns' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+
+        thread.kill
+        expect(thread.join(0.2)).to be_nil
+        expect(thread).to be_alive
+
+        release << :go
+        expect(thread.join(5)).to eq(thread)
+        expect(thread).not_to be_alive
+      end
+
+      it 'finishes the scan in progress, then stops before the next one' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+        thread.kill
+        release << :go
+        thread.join(5)
+
+        cached = setup_files.instance_variable_get(:@files_cache)
+        expect(cached.keys).to contain_exactly('base.yaml', 'TestChar-setup.yaml')
+        expect(cached['base.yaml'].peek(:version)).to eq(1)
+        expect(Dir).not_to have_received(:glob).with(start_with(data_dir))
+      end
+
+      it 'leaves the cache whole: every file found is loaded with its digest' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+        thread.kill
+        release << :go
+        thread.join(5)
+
+        setup_files.instance_variable_get(:@files_cache).each_value do |info|
+          filepath = File.join(info.path, info.name)
+          expect(info.digest).to eq(Digest::SHA256.file(filepath).hexdigest)
+        end
+      end
+
+      it 'defers Thread#raise too, then raises it once the scan returns' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+
+        thread.raise(RuntimeError, 'stop requested')
+        expect(thread.join(0.2)).to be_nil
+
+        release << :go
+        expect { thread.value }.to raise_error(RuntimeError, 'stop requested')
+      end
+
+      it 'releases the monitor when the deferred kill fires' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+        thread.kill
+        release << :go
+        thread.join(5)
+
+        expect(setup_files.mon_locked?).to be(false)
+        other = spawn_loader { setup_files.synchronize { :entered } }
+        expect(other.join(5)).to eq(other)
+        expect(other.value).to eq(:entered)
+      end
+
+      it 'holds back each kill sent during the scan, not just the first' do
+        thread = spawn_loader { setup_files.reload }
+        wait_until_inside_scan
+
+        3.times do
+          thread.kill
+          expect(thread.join(0.05)).to be_nil
+        end
+
+        release << :go
+        expect(thread.join(5)).to eq(thread)
+      end
+    end
+
+    context 'with an interrupt that arrives outside the directory scan' do
+      it 'still kills a thread waiting for the monitor' do
+        block_profiles_glob
+        setup_files.mon_enter
+        begin
+          thread = spawn_loader { setup_files.reload }
+          wait_until_sleeping(thread)
+
+          thread.kill
+          expect(thread.join(5)).to eq(thread)
+          expect(entered).to be_empty
+        ensure
+          setup_files.mon_exit
+        end
+      end
+
+      it 'restores immediate interrupts once #load_files returns' do
+        ready = Queue.new
+        thread = spawn_loader do
+          setup_files.reload
+          ready << :loaded
+          sleep
+        end
+        expect(ready.pop(timeout: 5)).to eq(:loaded)
+
+        thread.kill
+        expect(thread.join(5)).to eq(thread)
+      end
+
+      it 'does not mask interrupts for the caller after it returns' do
+        masked = spawn_loader do
+          setup_files.reload
+          Thread.pending_interrupt?
+        end
+        expect(masked.value).to be(false)
+      end
+    end
+
+    context 'with errors raised by the scan itself' do
+      it 'still propagates a Dir.glob failure to the caller' do
+        allow(Dir).to receive(:glob).and_raise(Errno::EACCES, profiles_dir)
+        expect { setup_files.reload }.to raise_error(Errno::EACCES)
+        expect(setup_files.mon_locked?).to be(false)
+      end
+
+      it 'still loads files normally when nothing interrupts it' do
+        File.write(File.join(profiles_dir, 'base.yaml'), { version: 3 }.to_yaml)
+        File.write(File.join(profiles_dir, 'TestChar-setup.yaml'), {}.to_yaml)
+        expect(spawn_loader { setup_files.get_settings.version }.value).to eq(3)
+      end
+    end
+
+    # These run the real Dir.glob and File.open against a real directory and
+    # count this process's open descriptors. Without the deferral almost every
+    # kill leaks one descriptor, so a few hundred kills fail by a wide margin.
+    context 'with real descriptors', if: %w[/dev/fd /proc/self/fd].any? { |dir| File.directory?(dir) } do
+      let(:fd_dir) { %w[/proc/self/fd /dev/fd].find { |dir| File.directory?(dir) } }
+      let(:kills) { 300 }
+
+      def open_descriptors
+        Dir.children(fd_dir).size
+      end
+
+      # Kills `kills` loader threads at random points inside a busy loop of
+      # `work`, waiting for each to die, and returns how many were alive (not
+      # yet finished) when the kill was sent. `between` runs on the spec's own
+      # thread before each loader starts, so its file I/O is never killed.
+      def kill_loaders_repeatedly(between: nil, &work)
+        Array.new(kills) do
+          between&.call
+          thread = spawn_loader { loop(&work) }
+          sleep(rand * 0.002)
+          alive = thread.alive?
+          thread.kill
+          expect(thread.join(5)).to eq(thread)
+          alive
+        end.count(true)
+      end
+
+      # Hundreds of unrelated files make each scan read a large directory, the
+      # way a shared scripts/profiles directory does, widening the window.
+      before do
+        300.times { |i| FileUtils.touch(File.join(profiles_dir, "Other#{i}-setup.yaml")) }
+        File.write(File.join(profiles_dir, 'base.yaml'), { version: 1 }.to_yaml)
+        File.write(File.join(profiles_dir, 'TestChar-setup.yaml'), { hometown: 'Crossing' }.to_yaml)
+        File.write(File.join(data_dir, 'base-town.yaml'), { town: { 'Crossing' => { 'id' => 1 } } }.to_yaml)
+        setup_files.reload # warm the cache so later passes are steady-state
+      end
+
+      it 'does not leak a descriptor when threads running #get_settings are killed' do
+        before_count = open_descriptors
+        expect(kill_loaders_repeatedly { setup_files.get_settings }).to eq(kills)
+        expect(open_descriptors).to eq(before_count)
+      end
+
+      it 'does not leak a descriptor when threads running #get_data are killed' do
+        before_count = open_descriptors
+        expect(kill_loaders_repeatedly { setup_files.get_data('town') }).to eq(kills)
+        expect(open_descriptors).to eq(before_count)
+      end
+
+      it 'does not leak a descriptor when threads running #reload are killed' do
+        before_count = open_descriptors
+        expect(kill_loaders_repeatedly { setup_files.reload }).to eq(kills)
+        expect(open_descriptors).to eq(before_count)
+      end
+
+      it 'does not leak a descriptor when a changed file is reloaded as threads are killed' do
+        base = File.join(profiles_dir, 'base.yaml')
+        before_count = open_descriptors
+        rewrite = -> { File.write(base, { version: rand(1_000_000) }.to_yaml) }
+        killed = kill_loaders_repeatedly(between: rewrite) { setup_files.reload }
+        expect(killed).to eq(kills)
+        expect(open_descriptors).to eq(before_count)
+      end
+
+      it 'keeps the monitor free after hundreds of kills' do
+        kill_loaders_repeatedly { setup_files.reload }
+        expect(setup_files.mon_locked?).to be(false)
+        expect(setup_files.get_settings.version).to eq(1)
+      end
+    end
+  end
 end

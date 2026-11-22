@@ -276,41 +276,51 @@ module Lich
 
       def load_files(glob_patterns = [])
         synchronize do
-          safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
-          # Build a map of filename -> filepath for all files currently on disk
-          current_files = {}
-          glob_patterns.each do |glob_pattern|
-            Dir.glob(glob_pattern)
-               .select { |filepath| File.file?(filepath) }
-               .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
-          end
+          # Defer Thread#kill and Thread#raise until the scan is done. A thread
+          # killed inside Dir.glob or File.open can leak the descriptor: no Ruby
+          # object owns it yet, so GC never closes it. Script#kill stops script
+          # threads with Thread#kill, so a script stopped while loading settings
+          # leaked a scripts/profiles handle on every stop until the process hit
+          # its open-files limit. Object, not Exception: the kill signal is not an
+          # Exception, so Exception => :never does not defer it. Inside synchronize
+          # so a thread still waiting for the monitor stays killable.
+          Thread.handle_interrupt(Object => :never) do
+            safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
+            # Build a map of filename -> filepath for all files currently on disk
+            current_files = {}
+            glob_patterns.each do |glob_pattern|
+              Dir.glob(glob_pattern)
+                 .select { |filepath| File.file?(filepath) }
+                 .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
+            end
 
-          # Evict cache entries whose backing files no longer exist on disk.
-          # Only remove entries whose path matches the directories being scanned
-          # AND whose name matches our glob patterns. This prevents a data-dir
-          # reload from evicting identically-named profile-dir entries.
-          scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
-          @files_cache.delete_if do |name, info|
-            scan_dirs.include?(info.path) &&
-              !current_files.key?(name) &&
-              glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
-          end
+            # Evict cache entries whose backing files no longer exist on disk.
+            # Only remove entries whose path matches the directories being scanned
+            # AND whose name matches our glob patterns. This prevents a data-dir
+            # reload from evicting identically-named profile-dir entries.
+            scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
+            @files_cache.delete_if do |name, info|
+              scan_dirs.include?(info.path) &&
+                !current_files.key?(name) &&
+                glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
+            end
 
-          current_files.each do |filename, filepath|
-            # Freshness is decided by file content (SHA256), not mtime. mtime is
-            # unreliable: two writes within one filesystem timestamp tick share
-            # an mtime, so an mtime-only check serves stale data after a fast
-            # rewrite (see issue #1596). We also reload when the winning source
-            # path changes (e.g. a scripts/data/custom override is removed and
-            # the same basename now resolves to scripts/data), which an
-            # mtime-only check masks when the two files share an mtime.
-            current_digest = file_digest(filepath)
-            cached_file = cache_get_by_filename(filename)
-            safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
-            if cached_file.nil? ||
-               cached_file.path != File.dirname(filepath) ||
-               cached_file.digest != current_digest
-              cache_put_by_filepath(filepath, digest: current_digest)
+            current_files.each do |filename, filepath|
+              # Freshness is decided by file content (SHA256), not mtime. mtime is
+              # unreliable: two writes within one filesystem timestamp tick share
+              # an mtime, so an mtime-only check serves stale data after a fast
+              # rewrite (see issue #1596). We also reload when the winning source
+              # path changes (e.g. a scripts/data/custom override is removed and
+              # the same basename now resolves to scripts/data), which an
+              # mtime-only check masks when the two files share an mtime.
+              current_digest = file_digest(filepath)
+              cached_file = cache_get_by_filename(filename)
+              safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
+              if cached_file.nil? ||
+                 cached_file.path != File.dirname(filepath) ||
+                 cached_file.digest != current_digest
+                cache_put_by_filepath(filepath, digest: current_digest)
+              end
             end
           end
         end
