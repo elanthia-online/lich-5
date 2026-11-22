@@ -24,6 +24,15 @@ module Lich
             @windows = []
             @degradations = {}
             @window_viewers = {}.compare_by_identity
+            # Admitted UI work that has not run yet: queued blocks, and
+            # scheduled sources before their first run, each with its source
+            # ID and the monotonic time it is due. Counted outside the
+            # shadow-state lock so admission stays lock-free.
+            @pending_mutex = Mutex.new
+            @pending_queue = 0
+            @pending_sources = {}
+            @running_ui = 0
+            @admitted_ui = 0
             notice = "#{owner.name}: legacy GTK compatibility is deprecated; convert this script to native WebUI."
             respond(notice)
             Lich.log(notice)
@@ -155,12 +164,94 @@ module Lich
 
             context = @callback_context
             context = nil unless context&.first.equal?(Thread.current)
-            @dispatch.call do
-              execute_callback(context, &block)
+            # Counted until the block starts, so work already running when the
+            # script body ends does not count as left behind.
+            @pending_mutex.synchronize do
+              @pending_queue += 1
+              @admitted_ui += 1
+            end
+            admitted = false
+            begin
+              result = @dispatch.call do
+                ui_started
+                begin
+                  execute_callback(context, &block)
+                ensure
+                  ui_finished
+                end
+              end
+              admitted = true
+              result
+            ensure
+              @pending_mutex.synchronize { @pending_queue -= 1 } unless admitted
             end
           end
 
+          # Admitted UI work that has not started: queued blocks, and scheduled
+          # sources before their first run. A script body that ends with this
+          # set is the queue-then-exit pattern.
+          # @return [Boolean]
+          # @api private
+          def pending_ui?
+            !stopping? && @pending_mutex.synchronize { @pending_queue.positive? || !@pending_sources.empty? }
+          end
+
+          # Pending work, or admitted work still running. A window is only
+          # visible once its show completes, so a lingering owner must also
+          # wait out the callback that is building it.
+          # @return [Boolean]
+          # @api private
+          def busy_ui?
+            !stopping? && @pending_mutex.synchronize { @pending_queue.positive? || !@pending_sources.empty? || @running_ui.positive? }
+          end
+
+          # Count of queued blocks and scheduled sources ever admitted. A rise
+          # after the script body ends means a worker queued UI after it.
+          # @return [Integer]
+          # @api private
+          def ui_admissions
+            @pending_mutex.synchronize { @admitted_ui }
+          end
+
+          # Reports when the last scheduled source still waiting for its first
+          # run is due, so an accepted future source is told apart from work
+          # that stalled.
+          # @return [Float, nil] monotonic clock seconds, or nil with none waiting
+          # @api private
+          def pending_ui_due
+            @pending_mutex.synchronize { @pending_sources.each_value.map { |source| source[:due] }.max }
+          end
+
+          # Moves one queued block from pending to running.
+          # @return [void]
+          # @api private
+          def ui_started
+            @pending_mutex.synchronize do
+              @pending_queue -= 1
+              @running_ui += 1
+            end
+          end
+
+          # Retires one running queued block.
+          # @return [void]
+          # @api private
+          def ui_finished
+            @pending_mutex.synchronize { @running_ui -= 1 }
+          end
+
+          # @return [Boolean] whether any of this owner's top-level windows is shown
+          # @api private
+          def visible_windows?
+            !stopping? && synchronize { @windows.any?(&:visible?) }
+          end
+
           # Captures script/viewer attribution before handing timing to the core.
+          # The source counts as pending UI work, due after its interval, until
+          # its first run or its removal.
+          # @param receiver [Object] facade object named in a refusal
+          # @param operation [Symbol] facade operation named in a refusal
+          # @param interval_ms [Integer] delay before each run, in milliseconds
+          # @yield the source callback; a false or nil result stops repetition
           # @return [Integer] cancellable source ID; false/nil or callback failure stops repetition
           # @raise [UnsupportedOperation] for unsupported intervals, missing blocks or late registration
           def schedule(receiver, operation, interval_ms, &block)
@@ -170,17 +261,45 @@ module Lich
               context = @callback_context
               context = nil unless context&.first.equal?(Thread.current)
               @scheduler ||= Lich::WebUI.callback_scheduler(owner: @owner)
-              @scheduler.schedule(interval_ms) do
-                execute_callback(context, &block)
+              token = Object.new
+              due = Process.clock_gettime(Process::CLOCK_MONOTONIC) + (interval_ms / 1000.0)
+              @pending_mutex.synchronize do
+                @pending_sources[token] = { id: nil, due: due }
+                @admitted_ui += 1
               end
+              begin
+                id = @scheduler.schedule(interval_ms) do
+                  first = @pending_mutex.synchronize do
+                    next false unless @pending_sources.key?(token)
+
+                    @pending_sources.delete(token)
+                    @running_ui += 1
+                    true
+                  end
+                  begin
+                    execute_callback(context, &block)
+                  ensure
+                    @pending_mutex.synchronize { @running_ui -= 1 } if first
+                  end
+                end
+              rescue StandardError
+                @pending_mutex.synchronize { @pending_sources.delete(token) }
+                raise
+              end
+              @pending_mutex.synchronize { @pending_sources[token][:id] = id if @pending_sources.key?(token) }
+              id
             end
           end
 
           # Removes only an owner-authorized source; foreign IDs get the standing refusal.
+          # @param receiver [Object] facade object named in a refusal
+          # @param id [Integer] source ID returned by {#schedule}
           # @return [Boolean] whether the source was still live
+          # @raise [UnsupportedOperation] for an invalid or foreign source ID
           def remove_source(receiver, id)
             style_operation(receiver, :remove) do
               refuse(receiver, :remove) unless id.is_a?(Integer) && id.positive?
+              forget_pending_source(id)
               @scheduler ||= Lich::WebUI.callback_scheduler(owner: @owner)
               @scheduler.cancel(id)
             rescue Lich::WebUI::Error
@@ -190,8 +309,21 @@ module Lich
 
           # Widget teardown cancels only IDs retained from this session, including
           # owner close after registration has already been disabled.
+          # @param id [Integer] source ID retained by the widget
+          # @return [Boolean, nil] whether the source was still live; nil with no scheduler
+          # @api private
           def cancel_widget_source(id)
+            forget_pending_source(id)
             synchronize { @scheduler&.cancel(id) }
+          end
+
+          # Stops counting a removed source as pending UI work.
+          # @param id [Integer] source ID being removed
+          # @return [void]
+          # @api private
+          def forget_pending_source(id)
+            @pending_mutex.synchronize { @pending_sources.delete_if { |_token, source| source[:id] == id } }
+            nil
           end
 
           # Retains a top-level window for owner-death cleanup.

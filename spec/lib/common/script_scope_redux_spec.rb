@@ -177,4 +177,126 @@ RSpec.describe Lich::Common::ScriptScope do
                                      '-rcommon/script_scope', '-e', source)
     expect(status.success?).to be(true), output
   end
+
+  describe 'top-level include of script modules' do
+    # Runs the same source in the script scope and in an ordinary module, so
+    # Ruby's own include is the oracle.
+    def scoped_and_native(source, probe)
+      described_class.activate!
+      native = Module.new.module_eval("#{source}; extend self; #{probe}")
+      [eval("#{source}; #{probe}", described_class.script_binding), native]
+    end
+
+    after do
+      described_class.constants(false).grep(/\AIncludeCase/).each { |name| described_class.send(:remove_const, name) }
+      (described_class.instance_methods(false) + described_class.private_instance_methods(false)).grep(/\Ainclude_case/).each do |name|
+        described_class.send(:remove_method, name)
+      end
+    end
+
+    it 'gives the first module of one include call precedence' do
+      scoped, native = scoped_and_native(<<~RUBY, 'include_order_lookup')
+        module IncludeCaseOrderA; def include_order_lookup = :alpha; end
+        module IncludeCaseOrderB; def include_order_lookup = :beta; end
+        include IncludeCaseOrderA, IncludeCaseOrderB
+      RUBY
+      expect(native).to eq(:alpha)
+      expect(scoped).to eq(native)
+    end
+
+    it 'gives the most recently included module precedence' do
+      scoped, native = scoped_and_native(<<~RUBY, 'include_successive_lookup')
+        module IncludeCaseLaterB; def include_successive_lookup = :beta; end
+        include IncludeCaseLaterB
+        module IncludeCaseLaterA; def include_successive_lookup = :alpha; end
+        include IncludeCaseLaterA
+      RUBY
+      expect(native).to eq(:alpha)
+      expect(scoped).to eq(native)
+    end
+
+    it 'reaches a helper and a constant the included module itself includes' do
+      scoped, native = scoped_and_native(<<~RUBY, '[include_indirect_lookup, INCLUDE_INDIRECT_LIMIT]')
+        module IncludeCaseMixin
+          INCLUDE_INDIRECT_LIMIT = 7
+          def include_indirect_lookup = [:mixin, include_indirect_base]
+          def include_indirect_base = :base
+        end
+        module IncludeCaseOuter
+          include IncludeCaseMixin
+          def include_indirect_lookup = [:outer, super]
+        end
+        include IncludeCaseOuter
+      RUBY
+      expect(native).to eq([[:outer, [:mixin, :base]], 7])
+      expect(scoped).to eq(native)
+    end
+
+    it 'keeps a method the script declares itself ahead of every included module' do
+      scoped, native = scoped_and_native(<<~RUBY, 'include_case_direct')
+        module IncludeCaseShadowed; def include_case_direct = :included; end
+        def include_case_direct = :direct
+        include IncludeCaseShadowed
+      RUBY
+      expect(native).to eq(:direct)
+      expect(scoped).to eq(native)
+    end
+
+    it 'shows methods and constants added to a module after it was included' do
+      scoped, native = scoped_and_native(<<~RUBY, '[include_late_lookup, include_late_changed, INCLUDE_LATE_VALUE, respond_to?(:include_late_removed)]')
+        module IncludeCaseLate
+          def include_late_changed = :old
+          def include_late_removed = :gone
+        end
+        include IncludeCaseLate
+        module IncludeCaseLate
+          INCLUDE_LATE_VALUE = 5
+          def include_late_lookup = :late
+          def include_late_changed = :new
+          remove_method :include_late_removed
+        end
+      RUBY
+      expect(native).to eq([:late, :new, 5, false])
+      expect(scoped).to eq(native)
+    end
+
+    it 'forwards an included public helper to a script class with a real superclass' do
+      described_class.activate!
+      result = eval(<<~RUBY, described_class.script_binding)
+        module IncludeCaseForwarded
+          def include_forwarded_helper = :forwarded
+
+          private
+
+          def include_forwarded_private = :private
+        end
+        include IncludeCaseForwarded
+        class IncludeCaseError < StandardError
+          def probe = [include_forwarded_helper, respond_to?(:include_forwarded_helper), respond_to?(:include_forwarded_private)]
+        end
+        IncludeCaseError.new.probe
+      RUBY
+      expect(result).to eq([:forwarded, true, false])
+    end
+
+    it 'raises TypeError for a class, as Ruby does, and includes nothing from the call' do
+      described_class.activate!
+      script = described_class.script_binding
+      eval(<<~RUBY, script)
+        module IncludeCasePartial; def include_partial_lookup = :partial; end
+        class IncludeCaseClass
+          def include_class_lookup = :class
+        end
+      RUBY
+      expect { Module.new.include(Class.new) }.to raise_error(TypeError, /expected Module/)
+      expect { eval('include IncludeCasePartial, IncludeCaseClass', script) }.to raise_error(TypeError, /wrong argument type Class \(expected Module\)/)
+      expect { eval('include_class_lookup', script) }.to raise_error(NameError)
+      expect { eval('include_partial_lookup', script) }.to raise_error(NameError)
+    end
+
+    it 'raises ArgumentError for an include without arguments, as Ruby does' do
+      described_class.activate!
+      expect { eval('include', described_class.script_binding) }.to raise_error(ArgumentError)
+    end
+  end
 end
