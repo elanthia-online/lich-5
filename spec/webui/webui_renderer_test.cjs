@@ -1242,6 +1242,33 @@ test('a render after blur keeps the precise number, not its rounded display', t 
   assert.deepEqual(sent.at(-1).payload, { value: 2.85 }, 'the step starts from the precise value');
 });
 
+test('a render while focused keeps the precise number of a field the user has not typed in', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'focused' }] });
+  const frame = generation => ({ type: 'render', page: 'focused', generation,
+    bindings: { spin: ['change'], save: ['activate'] }, submissions: { save: ['spin'] },
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { value: 2.75, min: 0.5, max: 10, step: 0.1, digits: 1,
+        snap_to_step: false, stepper_buttons: true } },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } },
+      { type: 'button', cid: 'save', props: { label: 'Save' } }
+    ] } });
+  receive(frame(1));
+  dom.window.document.querySelector('input[type=number]').focus();
+  receive(frame(2));
+  const input = dom.window.document.querySelector('input[type=number]');
+  assert.equal(dom.window.document.activeElement, input, 'the render returns focus to the field');
+  assert.equal(input.value, '2.8', 'the field still shows the rounded display');
+  const before = sent.length;
+  input.blur();
+  assert.equal(sent.length, before, 'the blur sends no change the user did not make');
+  [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Save').click();
+  assert.deepEqual(sent.at(-1).submission, [2.75], 'the precise value is kept');
+  dom.window.document.querySelector('[aria-label=Increase]').click();
+  assert.deepEqual(sent.at(-1).payload, { value: 2.85 }, 'the step starts from the precise value');
+});
+
 test('a number clamps to the highest legal step when max is off-step', t => {
   const { dom, receive, sent } = fixture();
   t.after(() => dom.window.close());
