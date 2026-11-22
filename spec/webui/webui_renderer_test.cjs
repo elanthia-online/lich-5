@@ -1213,9 +1213,33 @@ test('an unrelated render keeps a number the user is still typing, unclamped', t
       { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
     ] } });
   receive(frame(1));
-  dom.window.document.querySelector('input[type=number]').value = '2';
+  const input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '2';
   receive(frame(2));
   assert.equal(dom.window.document.querySelector('input[type=number]').value, '2', 'the partly typed value survives the render');
+});
+
+test('a render after blur keeps the precise number, not its rounded display', t => {
+  const { dom, receive, sent } = fixture();
+  t.after(() => dom.window.close());
+  receive({ type: 'hello', pages: [{ address: 'stepped' }] });
+  const frame = generation => ({ type: 'render', page: 'stepped', generation, bindings: { spin: ['change'] }, submissions: {},
+    tree: { type: 'page', cid: 'root', props: {}, children: [
+      { type: 'number_input', cid: 'spin', props: { value: 0.5, min: 0.5, max: 10, step: 0.1, digits: 1,
+        snap_to_step: false, acceleration: 0.1, page_step: 1, stepper_buttons: true } },
+      { type: 'label', cid: 'note', props: { text: `render ${generation}` } }
+    ] } });
+  receive(frame(1));
+  const input = dom.window.document.querySelector('input[type=number]');
+  input.focus();
+  input.value = '2.75';
+  input.dispatchEvent(new dom.window.Event('input'));
+  input.blur();
+  assert.equal(input.value, '2.8', 'the blur shows the rounded display');
+  receive(frame(2));
+  dom.window.document.querySelector('[aria-label=Increase]').click();
+  assert.deepEqual(sent.at(-1).payload, { value: 2.85 }, 'the step starts from the precise value');
 });
 
 test('a number clamps to the highest legal step when max is off-step', t => {
