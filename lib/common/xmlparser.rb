@@ -104,7 +104,11 @@ module Lich
       # and wrapped in ash") is never taken for one. The link follows the
       # title at once, so the title ends in a space or is empty. The run after
       # the last player ("who is sitting.") ends in neither and has no title.
-      ROOM_PLAYERS_TITLE_SPLIT = /(?:\AAlso here: |, | and )((?:(?!, | and ).)* )?\z/m.freeze
+      # " and " separates only when a title (a capital), a "the body of"/"a"
+      # prefix or the link itself follows, so the " and " inside GemStone's
+      # "a stunned and webbed " prefix stays part of the prefix.
+      ROOM_PLAYERS_SEPARATOR = '(?:, | and (?=[A-Z]|the body of |a |\z))'
+      ROOM_PLAYERS_TITLE_SPLIT = /(?:\AAlso here: |#{ROOM_PLAYERS_SEPARATOR})((?:(?!#{ROOM_PLAYERS_SEPARATOR}).)* )?\z/m.freeze
       # Text before the container link on a stow container's header line.
       STOW_HEADER = /\A(?:In|On|Under|Behind) the\z/.freeze
       # The room number after a room title, in the legacy roomName style or a
@@ -1529,6 +1533,10 @@ module Lich
                   if (split = text_string.match(ROOM_PLAYERS_TITLE_SPLIT))
                     description = split.pre_match
                     title = split[1]
+                    # A separator starts a new player slot: a title or prefix
+                    # read before it belongs to no later player.
+                    @player_title = nil
+                    @player_status = nil
                   else
                     description = text_string
                     title = nil

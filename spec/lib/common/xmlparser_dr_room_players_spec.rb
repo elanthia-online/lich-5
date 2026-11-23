@@ -146,6 +146,25 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
           .to eq([['Bob', nil], ['Dr. Peter Corwin', nil], ['Delphine', 'sleeping']])
       end
 
+      # GemStone plain-text logs hold "a stunned and webbed <name>" three times
+      # (Tysong's corpus, PR #2481 review). The " and " inside the prefix is not
+      # a list separator: a lower-case word that is not a prefix follows it.
+      it 'keeps a status prefix that contains " and "' do
+        parser.instance_variable_set(:@game, 'GS')
+        expect(players("a stunned and webbed #{link('Alpha', 10700002)} (prone), #{link('Bob', 10700003)} " \
+                       "and a stunned and webbed Dr. Peter #{link('Corwin', 10700004)}"))
+          .to eq([['Alpha', 'stunned and webbed prone'], ['Bob', nil], ['Dr. Peter Corwin', 'stunned and webbed']])
+      end
+
+      # Every list separator starts a new player slot, so a title or prefix read
+      # before it never reaches a later player. The game sends no tag other than
+      # player links in this component (0 of 854,341 DR, 0 of 267,285 GS), so
+      # this pins the old reset rather than a shape seen in the wild.
+      it 'does not carry a title or prefix across a separator to the next player' do
+        expect(players("Druid <b>x</b>, #{link('Bob', 10700002)} and a stunned <b>y</b>, #{link('Corwin', 10700003)}."))
+          .to eq([['Bob', nil], ['Corwin', nil]])
+      end
+
       # #2416 P3. While a refresh is open, GameObj#status= writes only to the
       # staging pool, which holds no pc until this refresh links one, so the
       # previous refresh's last pc cannot take a status from the new list.
