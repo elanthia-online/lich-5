@@ -3,8 +3,9 @@
 =begin
   Handles installation of Lich5 from arbitrary GitHub branches.
 
-  Supports both main repository branches and fork branches via
-  owner:branch_name syntax. Downloads tarball archives, validates
+  Supports main repository branches, fork branches via owner:branch_name
+  syntax, and other repositories under an allowlisted owner via
+  owner/repo:branch_name syntax. Downloads tarball archives, validates
   structure, and delegates to ReleaseInstaller for actual installation.
 =end
 
@@ -12,6 +13,34 @@ module Lich
   module Util
     module Update
       class BranchInstaller
+        # Owners under which owner/repo:branch_name may name a repository
+        # other than lich-5, so a successor project (e.g.
+        # elanthia-online/lich-6) can be installed by opt-in. Any repository
+        # under these owners is accepted. Compared case-insensitively, as
+        # GitHub owner names are.
+        #
+        # This limits which repository names are accepted; it is not what
+        # decides who may replace lib/. Any owner's lich-5 fork can already
+        # be installed with owner:branch_name (or owner/lich-5:branch_name).
+        # Kept apart from GemPackages::TRUSTED_OWNERS, which grants
+        # unattended installs of script gems. A repository that is not a
+        # Lich installation (e.g. scripts) passes this check and is refused
+        # before anything is installed unless it has every entry
+        # ReleaseInstaller#validate_lich_structure asks for and a
+        # lib/version.rb.
+        REPO_OWNER_ALLOWLIST = %w[elanthia-online].freeze
+        # GitHub owner name characters.
+        OWNER_PATTERN = /\A[A-Za-z0-9-]+\z/.freeze
+        # GitHub owner and repository name characters.
+        REPO_SPEC_PATTERN = %r{\A(?<owner>[A-Za-z0-9-]+)/(?<repo>[A-Za-z0-9._-]+)\z}.freeze
+        # A LICH_VERSION assignment whose whole value is one quoted literal:
+        # nothing may follow the closing quote but .freeze and a comment, so
+        # the value read is the value Lich runs (not '6.0.0' + suffix). It
+        # must start in column 0: an indented one is usually inside a module
+        # (Lich::LICH_VERSION), and startup reads the top-level constant.
+        # Every lib/version.rb in lich-5's history assigns it in column 0.
+        COMPLETE_VERSION_ASSIGNMENT = /^LICH_VERSION[ \t]*=[ \t]*(['"])([^'"\r\n]+)\1(?:\.freeze)?[ \t]*(?:#[^\r\n]*)?\r?$/.freeze
+
         # @param snapshot_manager [SnapshotManager] snapshot management instance
         # @param release_installer [ReleaseInstaller] installer for performing updates
         def initialize(snapshot_manager, release_installer)
@@ -21,31 +50,20 @@ module Lich
 
         # Downloads and installs from a GitHub branch.
         #
-        # @param branch_spec [String] branch name or 'owner:branch_name'
+        # @param branch_spec [String] 'branch_name', 'owner:branch_name' or
+        #   'owner/lich-5:branch_name' (any owner's lich-5 fork), or
+        #   'owner/repo:branch_name' for another repository (owner must be in
+        #   REPO_OWNER_ALLOWLIST)
         # @return [void]
         def download_branch_update(branch_spec)
-          branch_spec = branch_spec.strip
-          if branch_spec.empty?
-            respond
-            respond "Error: Branch specification cannot be empty."
-            respond "Usage: #{$clean_lich_char}lich5-update --branch=<branch_name>"
-            respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>:<branch_name>"
-            respond
-            return
-          end
+          source = resolve_branch_source(branch_spec.strip)
+          return unless source
 
-          if branch_spec.include?(':')
-            owner, branch_name = branch_spec.split(':', 2)
-            repo = "#{owner}/lich-5"
-          else
-            owner = nil
-            branch_name = branch_spec
-            repo = GITHUB_REPO
-          end
+          repo, branch_name = source
 
           respond
           respond "Attempting to update to branch: #{branch_name}"
-          respond "Repository: #{repo}" if owner
+          respond "Repository: #{repo}" unless repo.casecmp?(GITHUB_REPO)
           respond "This will download from GitHub and extract over your current installation."
           respond
 
@@ -59,6 +77,9 @@ module Lich
 
             sanitized_branch = branch_name.gsub('/', '-')
             filename = "lich5-branch-#{sanitized_branch}"
+            # Set once perform_update starts replacing lib/, after which a
+            # failure can no longer claim the installation is unchanged.
+            installing = false
 
             begin
               respond
@@ -70,18 +91,37 @@ module Lich
                 end
 
                 version_file_path = File.join(source_dir, "lib", "version.rb")
-                version = @release_installer.extract_version_from_file(version_file_path)
-
-                if version.nil?
-                  respond
-                  respond "Warning: Could not extract version from branch's version.rb file."
-                  respond "Using existing Lich version identifier: #{LICH_VERSION}"
-                  version = LICH_VERSION
-                else
-                  respond
-                  respond "Detected version from branch: #{version}"
+                # Branch tracking is written into it, and #revert refuses a
+                # snapshot without it, so a tree without one would leave an
+                # install that later updates cannot snapshot and revert.
+                unless File.file?(version_file_path)
+                  raise StandardError, "Downloaded branch has no lib/version.rb, which this updater needs to track and revert it"
                 end
 
+                version = @release_installer.extract_version_from_file(version_file_path)
+                # #revert reads a snapshot's version the same way, without
+                # running it, and refuses one it cannot read, so falling back
+                # to the current version would install a tree whose next
+                # snapshot cannot be reverted. The version is also stored and
+                # compared with Gem::Version at login, which raises on one
+                # like 'v6.0.0', and store_branch_tracking reads the file as
+                # text, which fails part way through the install unless it is
+                # valid UTF-8. Exactly one assignment is accepted, and its
+                # whole value must be the literal, so the one read is the one
+                # Lich runs.
+                content = File.binread(version_file_path)
+                utf8 = content.dup.force_encoding(Encoding::UTF_8).valid_encoding?
+                single = SnapshotManager.version_assignments(content).size == 1
+                complete = SnapshotManager.without_bom(content).scan(COMPLETE_VERSION_ASSIGNMENT).map(&:last)
+                literal = complete.size == 1 && complete.first == version
+                unless utf8 && single && literal && version && Gem::Version.correct?(version)
+                  raise StandardError, "Downloaded branch's lib/version.rb must be UTF-8 and assign LICH_VERSION once, a version number in quotes (e.g. '6.0.0'), which this updater needs to install and revert it"
+                end
+
+                respond
+                respond "Detected version from branch: #{version}"
+
+                installing = true
                 @release_installer.perform_update(source_dir, version, snapshot_dir)
 
                 Lich::Util::Update.store_branch_tracking(branch_name, repo, version)
@@ -91,7 +131,10 @@ module Lich
               respond
               respond "Successfully updated to branch: #{branch_name} (version #{extracted_version})"
               respond "Branch tracking: This installation is now tracking branch '#{branch_name}'"
-              respond "                 from repository '#{repo}'" if owner
+              respond "                 from repository '#{repo}'" unless repo.casecmp?(GITHUB_REPO)
+              respond
+              respond_recovery_steps(snapshot_dir)
+              respond
               respond "You should exit the game, then log back in to use the updated version."
               respond
               respond "To check your current branch status, run: #{$clean_lich_char}lich5-update --status"
@@ -100,16 +143,140 @@ module Lich
               respond
               respond "Error: Could not download branch '#{branch_name}'"
               respond "HTTP Error: #{e.message}"
-              respond "Please verify the branch name exists on GitHub."
+              if e.message.start_with?('404')
+                respond "Please verify that repository '#{repo}' and its branch '#{branch_name}' exist on GitHub."
+                if repo.casecmp?(GITHUB_REPO) && branch_name.include?('/')
+                  respond "To install from another repository, use --branch=<owner>/<repo>:<branch_name>."
+                end
+              end
               respond
             rescue StandardError => e
               respond
               respond "Error during branch update: #{e.message}"
-              respond "Your installation has been preserved."
-              respond "You may want to run '#{$clean_lich_char}lich5-update --revert' if needed."
+              if installing
+                respond "The update failed after it had started replacing your installation."
+                respond_recovery_steps(snapshot_dir)
+              else
+                respond "Your installation has been preserved."
+                respond "You may want to run '#{$clean_lich_char}lich5-update --revert' if needed."
+              end
               respond
             end
           end
+        end
+
+        private
+
+        # Splits a branch spec into the repository and branch to download.
+        # Git ref names cannot contain ':', so the first ':' separates the
+        # source from the branch, and a branch may itself contain '/'.
+        #
+        # @param branch_spec [String] stripped branch spec
+        # @return [Array(String, String), nil] [owner/repo, branch_name], or
+        #   nil after telling the user why the spec was refused
+        # @api private
+        def resolve_branch_source(branch_spec)
+          source, separator, branch_name = branch_spec.partition(':')
+          return incomplete_spec(branch_spec) if source.empty?
+          return [GITHUB_REPO, source] if separator.empty?
+
+          source = source.strip
+          branch_name = branch_name.strip
+          return incomplete_spec(branch_spec) if source.empty? || branch_name.empty?
+
+          unless source.include?('/')
+            return [fork_repo(source), branch_name] if OWNER_PATTERN.match?(source)
+
+            respond_usage("Error: '#{source}' is not a valid GitHub owner.")
+            return nil
+          end
+
+          match = REPO_SPEC_PATTERN.match(source)
+          # A clone URL's '.git' is not part of the repository name.
+          repo_name = match && match[:repo].sub(/\.git\z/i, '')
+          if match.nil? || ['', '.', '..'].include?(repo_name)
+            respond_usage("Error: '#{source}' is not a valid owner/repo.")
+            return nil
+          end
+
+          owner = match[:owner]
+          # owner/lich-5 is how GitHub names a fork, so treat it as owner:branch.
+          return [fork_repo(owner), branch_name] if repo_name.casecmp?('lich-5')
+
+          unless REPO_OWNER_ALLOWLIST.any? { |allowed| allowed.casecmp?(owner) }
+            respond_usage("Error: Repositories other than lich-5 can only be installed from: #{REPO_OWNER_ALLOWLIST.join(', ')}.")
+            return nil
+          end
+
+          ["#{owner}/#{repo_name}", branch_name]
+        end
+
+        # Tells the user where the snapshot taken before this update is, what
+        # --revert restores from it and how to put Lich's program files back
+        # by hand.
+        # --revert does not restore the top-level files, and after a restart
+        # it runs the installed tree's code, so these steps are the only way
+        # back that always works. Each live directory is named on its own, as
+        # --lib-dir and --script-dir can move them out of LICH_DIR.
+        #
+        # @param snapshot_dir [String] snapshot taken before this update
+        # @return [void]
+        # @api private
+        def respond_recovery_steps(snapshot_dir)
+          launcher = File.basename($PROGRAM_NAME)
+          lich_dir = File.expand_path(LICH_DIR)
+          # --lib-dir and --script-dir may be relative; Lich resolves them
+          # against LICH_DIR, so print where they really are.
+          lib_dir = File.expand_path(LIB_DIR, lich_dir)
+          script_dir = File.expand_path(SCRIPT_DIR, lich_dir)
+          saved = File.expand_path(snapshot_dir, lich_dir)
+          respond "Your previous installation is saved in: #{saved}"
+          respond "'#{$clean_lich_char}lich5-update --revert' restores the newest snapshot of a stable release, which is"
+          respond "this one only if you were on a stable release and nothing has updated or taken a snapshot"
+          respond "since. It puts back lib/, #{launcher} and core scripts but may not put back Gemfile and"
+          respond "LICENSE; for those, do step 3."
+          respond "If Lich will not start, or to put back this snapshot's program files later, do all three:"
+          respond "  1. Move everything in #{lib_dir} to a new folder outside it and keep that"
+          respond "     folder (a failed --revert may have left the only copy of files there), then"
+          respond "     copy everything in #{File.join(saved, 'lib')} into the now empty #{lib_dir}."
+          respond "  2. Copy the scripts in #{File.join(saved, 'scripts')} into #{script_dir}."
+          respond "  3. Copy #{launcher} and any Gemfile and LICENSE in #{saved} into #{lich_dir}."
+        end
+
+        # Names the lich-5 repository of +owner+.
+        #
+        # @param owner [String] GitHub owner of a lich-5 fork
+        # @return [String] owner/lich-5, spelled as GITHUB_REPO when it is
+        #   the main repository, so branch tracking records one spelling
+        # @api private
+        def fork_repo(owner)
+          repo = "#{owner}/lich-5"
+          repo.casecmp?(GITHUB_REPO) ? GITHUB_REPO : repo
+        end
+
+        # Refuses a spec missing its source or its branch.
+        #
+        # @param branch_spec [String] spec missing its source or branch
+        # @return [nil]
+        # @api private
+        def incomplete_spec(branch_spec)
+          respond_usage("Error: Branch specification is incomplete: '#{branch_spec}'.")
+          nil
+        end
+
+        # Tells the user why a spec was refused and which forms are accepted.
+        #
+        # @param error [String] reason the spec was refused
+        # @return [void]
+        # @api private
+        def respond_usage(error)
+          respond
+          respond error
+          respond "Usage: #{$clean_lich_char}lich5-update --branch=<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>:<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>/lich-5:<branch_name>"
+          respond "   Or: #{$clean_lich_char}lich5-update --branch=<owner>/<repo>:<branch_name>  (other repos; owner: #{REPO_OWNER_ALLOWLIST.join(', ')})"
+          respond
         end
       end
     end

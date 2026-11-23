@@ -365,6 +365,21 @@ RSpec.describe Lich::WebUI::Validator do
     end.to raise_error(Lich::WebUI::SchemaViolationError, /surface events are not enabled/)
   end
 
+  it 'accepts every surface modifier, including the meta key, and refuses unknown ones' do
+    composite = Marshal.load(Marshal.dump(valid_properties[:composite])).merge(surface_events: true)
+    props = validator.validate_component!(:composite, composite, **context)
+    activate = lambda do |modifiers|
+      validator.validate_event!(
+        :composite, :surface_activate,
+        { x: 1, y: 1, button: 'primary', modifiers: modifiers }, props: props, **context
+      )
+    end
+    expect(activate.call(['meta'])[:modifiers].map(&:to_s)).to eq(['meta'])
+    expect(activate.call(%w[ctrl shift alt meta])[:modifiers].map(&:to_s)).to eq(%w[ctrl shift alt meta])
+    expect { activate.call(['super']) }.to raise_error(Lich::WebUI::SchemaViolationError)
+    expect { activate.call(%w[ctrl shift alt meta ctrl]) }.to raise_error(Lich::WebUI::SchemaViolationError)
+  end
+
   it 'requires dialog defaults only for the default absent-viewer policy' do
     expect do
       validator.validate_component!(

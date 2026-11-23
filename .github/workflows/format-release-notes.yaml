@@ -33,9 +33,13 @@ jobs:
   format:
     runs-on: ubuntu-latest
     # Only proceed on successful upstream runs OR on direct release events.
+    # Stable release-please completions format only on elanthia-online/lich-5:
+    # forks skip that job, so its run still succeeds with no release to format.
     if: >
       github.event_name != 'workflow_run' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.name != 'release-please (stable on push)' ||
+        github.repository == 'elanthia-online/lich-5'))
 
     steps:
       - name: Seed current release

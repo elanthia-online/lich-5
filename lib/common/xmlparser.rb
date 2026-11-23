@@ -96,6 +96,19 @@ module Lich
       # Saga dialect's first fragment ("Also here: " or "Also here: Monster ")
       # always ends in whitespace because a player link follows it.
       DR_LEGACY_PLAYERS_RUN = /\AAlso here: .*\S\z/m.freeze
+      # The next player's title in a linked room players text run (group 1),
+      # with any "the body of"/"a stunned" prefix. It follows the run's last
+      # list separator: "Also here: " opens the list, ", " separates players
+      # and " and " comes before the last one. A title never contains a
+      # separator, so a description's own ", " or " and " ("coated in soot
+      # and wrapped in ash") is never taken for one. The link follows the
+      # title at once, so the title ends in a space or is empty. The run after
+      # the last player ("who is sitting.") ends in neither and has no title.
+      # " and " separates only when a title (a capital), a "the body of"/"a"
+      # prefix or the link itself follows, so the " and " inside GemStone's
+      # "a stunned and webbed " prefix stays part of the prefix.
+      ROOM_PLAYERS_SEPARATOR = '(?:, | and (?=[A-Z]|the body of |a |\z))'
+      ROOM_PLAYERS_TITLE_SPLIT = /(?:\AAlso here: |#{ROOM_PLAYERS_SEPARATOR})((?:(?!#{ROOM_PLAYERS_SEPARATOR}).)* )?\z/m.freeze
       # Text before the container link on a stow container's header line.
       STOW_HEADER = /\A(?:In|On|Under|Behind) the\z/.freeze
       # The room number after a room title, in the legacy roomName style or a
@@ -1513,14 +1526,31 @@ module Lich
                   }
                   GameObj.commit_room_players
                 else
-                  if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
+                  # A run between two player links holds the previous player's
+                  # description, then the list separator, then the next
+                  # player's title. Split them first, so neither regex below
+                  # can read into the other half.
+                  if (split = text_string.match(ROOM_PLAYERS_TITLE_SPLIT))
+                    description = split.pre_match
+                    title = split[1]
+                    # A separator starts a new player slot: a title or prefix
+                    # read before it belongs to no later player.
+                    @player_title = nil
+                    @player_status = nil
+                  else
+                    description = text_string
+                    title = nil
+                  end
+                  if @pc && ((description =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (description =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
                     @pc_status = @pc_status ? "#{@pc_status} #{$1}" : $1
                     @pc_status = "#{@pc_status} #{$2}" if $2
                     @pc.status = @pc_status
                   end
-                  if text_string =~ /(?:^Also here: |, )(?:a )?([a-z\s]+)?([\w\s\-!\?',]+)?$/
-                    @player_status = ($1.strip.gsub('the body of', 'dead')) if $1
-                    @player_title = $2
+                  # A local MatchData, not $1/$2: the gsub resets $~, which
+                  # used to drop the title after "the body of"/"a stunned".
+                  if title && (parts = title.match(/\A(?:a )?([a-z\s]+)?(.*)\z/m))
+                    @player_status = parts[1].strip.gsub('the body of', 'dead') if parts[1]
+                    @player_title = parts[2] unless parts[2].empty?
                   end
                 end
               end
