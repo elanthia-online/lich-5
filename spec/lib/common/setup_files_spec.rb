@@ -872,6 +872,16 @@ RSpec.describe Lich::Common::SetupFiles do
         Dir.children(fd_dir).size
       end
 
+      # The count to compare against after the kills. GC first, so a File that
+      # an earlier spec left unclosed is finalized now rather than during the
+      # kills, where it would lower the final count. GC cannot hide the leak
+      # under test: a descriptor leaked inside Dir.glob or File.open has no
+      # Ruby object, so GC never closes it.
+      def descriptor_baseline
+        GC.start
+        open_descriptors
+      end
+
       # Counts, per thread, the real Dir.glob calls it has started.
       def count_globs
         allow(Dir).to receive(:glob).and_wrap_original do |original, *args, **kwargs|
@@ -910,26 +920,26 @@ RSpec.describe Lich::Common::SetupFiles do
       end
 
       it 'does not leak a descriptor when threads running #get_settings are killed' do
-        before_count = open_descriptors
+        before_count = descriptor_baseline
         expect(kill_loaders_repeatedly { setup_files.get_settings }).to eq(kills)
         expect(open_descriptors).to eq(before_count)
       end
 
       it 'does not leak a descriptor when threads running #get_data are killed' do
-        before_count = open_descriptors
+        before_count = descriptor_baseline
         expect(kill_loaders_repeatedly { setup_files.get_data('town') }).to eq(kills)
         expect(open_descriptors).to eq(before_count)
       end
 
       it 'does not leak a descriptor when threads running #reload are killed' do
-        before_count = open_descriptors
+        before_count = descriptor_baseline
         expect(kill_loaders_repeatedly { setup_files.reload }).to eq(kills)
         expect(open_descriptors).to eq(before_count)
       end
 
       it 'does not leak a descriptor when a changed file is reloaded as threads are killed' do
         base = File.join(profiles_dir, 'base.yaml')
-        before_count = open_descriptors
+        before_count = descriptor_baseline
         rewrite = -> { File.write(base, { version: rand(1_000_000) }.to_yaml) }
         killed = kill_loaders_repeatedly(between: rewrite) { setup_files.reload }
         expect(killed).to eq(kills)
