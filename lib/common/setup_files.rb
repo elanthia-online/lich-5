@@ -92,7 +92,7 @@ module Lich
       end
 
       def safe_load_yaml(filepath)
-        OpenStruct.new(YAML.unsafe_load_file(filepath)).to_h
+        OpenStruct.new(YAML.unsafe_load(read_yaml_file(filepath), filename: filepath)).to_h
       rescue => e
         safe_message("bold", "*** ERROR PARSING YAML FILE ***")
         safe_message("bold", e.message)
@@ -274,56 +274,88 @@ module Lich
         include_order
       end
 
+      # Scans the given glob patterns and refreshes the cache to match disk:
+      # evicts entries whose file is gone, then loads new and changed files.
+      #
+      # Pattern precedence: patterns are scanned in order and the first file
+      # found for a basename wins, so earlier patterns (scripts/data/custom
+      # before scripts/data, see #get_data_glob_patterns) override later ones.
+      # Eviction only touches entries from the scanned directories whose names
+      # match one of the patterns.
+      #
+      # Interrupt deferral: each descriptor-opening call (Dir.glob here,
+      # File.read in #read_yaml_file, Digest in #file_digest) runs inside
+      # #without_interrupts, so a Thread#kill or Thread#raise that arrives
+      # mid-call is delivered as soon as that call returns. Everything else
+      # (logging, YAML parsing, error messages) runs with interrupts as the
+      # caller had them.
+      #
+      # @param glob_patterns [Array<String>] glob patterns, highest precedence first
+      # @return [void]
       def load_files(glob_patterns = [])
         synchronize do
-          # Defer Thread#kill and Thread#raise until the scan is done. A thread
-          # killed inside Dir.glob or File.open can leak the descriptor: no Ruby
-          # object owns it yet, so GC never closes it. Script#kill stops script
-          # threads with Thread#kill, so a script stopped while loading settings
-          # leaked a scripts/profiles handle on every stop until the process hit
-          # its open-files limit. Object, not Exception: the kill signal is not an
-          # Exception, so Exception => :never does not defer it. Inside synchronize
-          # so a thread still waiting for the monitor stays killable.
-          Thread.handle_interrupt(Object => :never) do
-            safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
-            # Build a map of filename -> filepath for all files currently on disk
-            current_files = {}
-            glob_patterns.each do |glob_pattern|
-              Dir.glob(glob_pattern)
-                 .select { |filepath| File.file?(filepath) }
-                 .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
-            end
+          safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
+          # Build a map of filename -> filepath for all files currently on disk
+          current_files = {}
+          glob_patterns.each do |glob_pattern|
+            without_interrupts { Dir.glob(glob_pattern) }
+              .select { |filepath| File.file?(filepath) }
+              .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
+          end
 
-            # Evict cache entries whose backing files no longer exist on disk.
-            # Only remove entries whose path matches the directories being scanned
-            # AND whose name matches our glob patterns. This prevents a data-dir
-            # reload from evicting identically-named profile-dir entries.
-            scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
-            @files_cache.delete_if do |name, info|
-              scan_dirs.include?(info.path) &&
-                !current_files.key?(name) &&
-                glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
-            end
+          # Evict cache entries whose backing files no longer exist on disk.
+          # Only remove entries whose path matches the directories being scanned
+          # AND whose name matches our glob patterns. This prevents a data-dir
+          # reload from evicting identically-named profile-dir entries.
+          scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
+          @files_cache.delete_if do |name, info|
+            scan_dirs.include?(info.path) &&
+              !current_files.key?(name) &&
+              glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
+          end
 
-            current_files.each do |filename, filepath|
-              # Freshness is decided by file content (SHA256), not mtime. mtime is
-              # unreliable: two writes within one filesystem timestamp tick share
-              # an mtime, so an mtime-only check serves stale data after a fast
-              # rewrite (see issue #1596). We also reload when the winning source
-              # path changes (e.g. a scripts/data/custom override is removed and
-              # the same basename now resolves to scripts/data), which an
-              # mtime-only check masks when the two files share an mtime.
-              current_digest = file_digest(filepath)
-              cached_file = cache_get_by_filename(filename)
-              safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
-              if cached_file.nil? ||
-                 cached_file.path != File.dirname(filepath) ||
-                 cached_file.digest != current_digest
-                cache_put_by_filepath(filepath, digest: current_digest)
-              end
+          current_files.each do |filename, filepath|
+            # Freshness is decided by file content (SHA256), not mtime. mtime is
+            # unreliable: two writes within one filesystem timestamp tick share
+            # an mtime, so an mtime-only check serves stale data after a fast
+            # rewrite (see issue #1596). We also reload when the winning source
+            # path changes (e.g. a scripts/data/custom override is removed and
+            # the same basename now resolves to scripts/data), which an
+            # mtime-only check masks when the two files share an mtime.
+            current_digest = file_digest(filepath)
+            cached_file = cache_get_by_filename(filename)
+            safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
+            if cached_file.nil? ||
+               cached_file.path != File.dirname(filepath) ||
+               cached_file.digest != current_digest
+              cache_put_by_filepath(filepath, digest: current_digest)
             end
           end
         end
+        nil
+      end
+
+      # Runs the block with Thread#kill and Thread#raise deferred until it
+      # returns. Use it only around a single call that opens and closes a
+      # descriptor. A thread killed inside Dir.glob or File.open can leak the
+      # descriptor: no Ruby object owns it yet, so GC never closes it. Script#kill
+      # stops script threads with Thread#kill, so a script stopped while loading
+      # settings leaked a scripts/profiles handle on every stop until the process
+      # hit its open-files limit.
+      #
+      # Keep the block to that one call. Threads inherit the mask of the thread
+      # that creates them, so anything that can start a thread inside the block
+      # (an error message reaching the client socket starts its writer) creates
+      # a thread that Thread#kill can never stop.
+      #
+      # Object, not Exception: the kill signal is not an Exception, so
+      # Exception => :never does not defer it. Called inside synchronize, so a
+      # thread still waiting for the monitor stays killable.
+      #
+      # @yield the descriptor-opening call
+      # @return [Object] the block's result
+      def without_interrupts(&block)
+        Thread.handle_interrupt(Object => :never, &block)
       end
 
       def cache_put_by_filepath(filepath, digest: nil)
@@ -339,12 +371,22 @@ module Lich
         end
       end
 
+      # Reads a YAML file the way YAML.unsafe_load_file opens it (BOM-aware
+      # UTF-8). Only the read is guarded (see #without_interrupts); parsing and
+      # any parse-error message run outside the guard.
+      #
+      # @param filepath [String]
+      # @return [String] file contents
+      def read_yaml_file(filepath)
+        without_interrupts { File.read(filepath, mode: 'r:bom|utf-8') }
+      end
+
       # Content hash used as the cache freshness signal. Returns nil when the
       # file cannot be read (e.g. it vanished between the glob and here); a nil
       # digest never equals a stored digest, so the entry is treated as changed
       # and reloaded on the next pass.
       def file_digest(filepath)
-        Digest::SHA256.file(filepath).hexdigest
+        without_interrupts { Digest::SHA256.file(filepath) }.hexdigest
       rescue => e
         safe_log "#{self.class}::#{__callee__} could not hash #{filepath}: #{e.message}" if @debug
         nil

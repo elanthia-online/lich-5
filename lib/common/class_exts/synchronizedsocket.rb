@@ -227,9 +227,31 @@ module Lich
         WRITER_INIT_MUTEX.synchronize do
           return if writer_alive?
 
-          @writer_thread = Thread.new { writer_loop }
+          # Immediate interrupts and the move to ThreadGroup::Default detach the
+          # writer from whichever thread wrote first (see #adopt_writer_thread).
+          @writer_thread = Thread.new { Thread.handle_interrupt(Object => :immediate) { writer_loop } }
           @writer_thread.name = 'client socket writer' if @writer_thread.respond_to?(:name=)
+          adopt_writer_thread(@writer_thread)
         end
+      end
+
+      # The writer belongs to the socket, not to the thread whose write started
+      # it. Thread.new copies the creating thread's ThreadGroup and interrupt
+      # mask. A writer started from a script thread therefore joined that
+      # script's group, and Script#kill killed it, possibly mid-write. A writer
+      # started inside Thread.handle_interrupt(Object => :never) could not be
+      # killed at all, which left Script#kill's cleanup waiting in Thread#join.
+      # #ensure_writer! resets the mask; this moves the writer out of the
+      # script's group. An enclosed source group refuses the move: the writer
+      # then stays there as before, and the reset mask keeps it killable, so
+      # the next write starts a replacement.
+      #
+      # @param writer [Thread]
+      # @return [void]
+      def adopt_writer_thread(writer)
+        ThreadGroup::Default.add(writer)
+      rescue ThreadError
+        nil
       end
 
       def writer_loop

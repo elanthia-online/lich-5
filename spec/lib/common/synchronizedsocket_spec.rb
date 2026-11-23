@@ -306,6 +306,72 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
+  # writer thread ownership -- the writer belongs to the socket, not to the
+  # thread whose write happened to start it
+  # ===========================================================================
+  describe 'writer thread ownership' do
+    let(:threads) { [] }
+
+    before { allow(delegate).to receive(:puts) }
+
+    after { threads.each { |thread| thread.kill.join(2) } }
+
+    def writer
+      socket.instance_variable_get(:@writer_thread)
+    end
+
+    # Runs `block` on a thread placed in `group` before the block starts, the
+    # way a script thread runs, and waits for the block to return.
+    def first_write_from(group, enclose: false, &block)
+      gate = Queue.new
+      done = Queue.new
+      thread = Thread.new do
+        gate.pop
+        block.call
+        done << :written
+        sleep
+      end
+      threads << thread
+      group.add(thread)
+      group.enclose if enclose
+      gate << :go
+      expect(done.pop(timeout: 5)).to eq(:written)
+    end
+
+    it 'moves the writer out of the thread group of the thread that first wrote' do
+      first_write_from(ThreadGroup.new) { socket.puts('first') }
+      expect(writer.group).to equal(ThreadGroup::Default)
+    end
+
+    it 'starts a killable writer when the first write comes from inside Thread.handle_interrupt(Object => :never)' do
+      first_write_from(ThreadGroup.new) do
+        Thread.handle_interrupt(Object => :never) { socket.puts('first') }
+      end
+      eventually { expect(delegate).to have_received(:puts).with('first') }
+
+      first_writer = writer
+      first_writer.kill
+      expect(first_writer.join(2)).to eq(first_writer)
+    end
+
+    it 'keeps the writer killable, and replaces it, when an enclosed group refuses the move' do
+      group = ThreadGroup.new
+      first_write_from(group, enclose: true) do
+        Thread.handle_interrupt(Object => :never) { socket.puts('first') }
+      end
+      expect(writer.group).to equal(group)
+
+      first_writer = writer
+      first_writer.kill
+      expect(first_writer.join(2)).to eq(first_writer)
+
+      socket.puts('after the kill')
+      eventually { expect(delegate).to have_received(:puts).with('after the kill') }
+      expect(writer).not_to equal(first_writer)
+    end
+  end
+
+  # ===========================================================================
   # puts -- write-side resilience
   # ===========================================================================
   describe '#puts' do
