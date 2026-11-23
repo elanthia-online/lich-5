@@ -25,6 +25,7 @@ refusals, declared presentation omissions, and the shared owner lifecycle.
   transactional load behavior.
 
 There is no native GTK fallback, arbitrary GLib timer compatibility, or global
-`Gtk` constant. The shim does not suppress missing widgets or repair script
-business logic. Actual script operations and native window behavior require beta
+`Gtk` constant. The shim does not repair script business logic. A Builder
+lookup of an undeclared widget returns nil and is logged; a later call on that
+nil does nothing under Lich's `NilClass` extension. Actual script operations and native window behavior require beta
 acceptance; passing a bounded fixture does not establish complete script support.

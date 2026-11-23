@@ -13,6 +13,10 @@ module Lich
         class Session
           attr_reader :port
 
+          # @return [Boolean] whether this session's owner has been closed
+          # @api private
+          def closed? = @closed
+
           # Binds the script's shadow state and callback submissions to one host.
           # @param owner [Script] script whose lifetime governs all shim work
           def initialize(owner)
@@ -44,6 +48,17 @@ module Lich
           def synchronize(&block)
             @mutex.synchronize(&block)
           end
+
+          # Reports whether this thread already holds the session monitor, as
+          # every callback does; work that waits on other callbacks must not.
+          # @return [Boolean]
+          def held_by_current_thread? = @mutex.mon_owned?
+
+          # Reports whether the calling thread belongs to the script that owns
+          # this session, whether or not the session is still open.
+          # @return [Boolean] whether the current script is the owner
+          # @api private
+          def owner_call? = Script.current.equal?(@owner)
 
           # Serializes mutable style state on the existing owner monitor.
           # @raise [UnsupportedOperation] after teardown or for another script

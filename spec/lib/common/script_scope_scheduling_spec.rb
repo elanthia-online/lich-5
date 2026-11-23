@@ -66,16 +66,31 @@ RSpec.describe 'owner-bound GLib scheduling' do
     expect(::Timeout).not_to equal(glib::Timeout)
   end
 
-  it 'permits owner-bound loop construction but refuses nested execution and termination' do
+  it 'runs an owner-bound loop until quit or session close, refusing foreign and callback runs' do
     loop = glib::MainLoop.new
-    expect { loop.run }.to raise_error(gtk::UnsupportedOperation, /operation=run/)
-    expect { loop.quit }.to raise_error(gtk::UnsupportedOperation, /operation=quit/)
+    expect(loop.quit).to be_nil
     expect { glib::MainLoop.new(:custom_context) }.to raise_error(ArgumentError)
     @other = Struct.new(:name).new('other.lic')
     allow(Lich::Common::Script).to receive(:current).and_return(@other)
-    expect { loop.run }.to raise_error(gtk::UnsupportedOperation)
+    expect { loop.run }.to raise_error(gtk::UnsupportedOperation, /operation=run/)
     allow(Lich::Common::Script).to receive(:current).and_return(owner)
-    gtk.session.close
+    refused = Queue.new
+    glib::Idle.add do
+      loop.run
+    rescue gtk::UnsupportedOperation => e
+      refused << e.message
+    end
+    expect(refused.pop(timeout: 2)).to match(/operation=run/)
+    # The idle re-arms until the run has started, so its quit cannot land
+    # before the run it is meant to end.
+    glib::Idle.add { loop.running? ? (loop.quit; false) : true }
+    expect(Timeout.timeout(5) { loop.run }).to be_nil
+    closer = Thread.new do
+      sleep 0.05 until loop.running?
+      gtk.session.close
+    end
+    expect(loop.run).to be_nil
+    closer.join
     expect { glib::MainLoop.new }.to raise_error(gtk::UnsupportedOperation)
   end
 

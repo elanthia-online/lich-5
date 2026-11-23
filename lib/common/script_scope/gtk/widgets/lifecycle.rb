@@ -26,7 +26,7 @@ module Lich
               end
             end
             optional = %i[key_press key_release blur] + (is_a?(RadioButton) ? [:activate] : [])
-            (builtin_events + signal_map.values + @signals.keys).uniq.reject { |event| %i[show map realize].include?(event) || (optional.include?(event) && !@signals.key?(event)) }.each { |event| bind_event(event) }
+            (builtin_events + signal_map.values + @signals.keys).uniq.reject { |event| Widget::UNBOUND_EVENTS.include?(event) || (optional.include?(event) && !@signals.key?(event)) }.each { |event| bind_event(event) }
             @handle
           end
 
@@ -57,21 +57,124 @@ module Lich
             @dialogs&.delete(dialog)
           end
 
-          # Clears the shared hidden property.
+          # Clears the shared hidden property. A widget presented by this call
+          # runs its map handlers, after its show handlers. A widget that was
+          # never shown is not mapped, so its first show under a presented
+          # parent is what maps it.
           # @return [Widget] self
           def show
             changed = !visible?
             write(:hidden, false)
             emit_handlers(:show) if changed && !destroyed?
+            refresh_mapped
             self
           end
+
+          # Reports whether this widget is presented: shown, under ancestors
+          # that are presented, inside a shown window.
+          # @return [Boolean] whether the widget is currently mapped
+          def mapped? = @mapped == true && !@destroyed
+
+          # Brings the mapped state of this widget and its descendants in line
+          # with what is presented. Every widget that becomes presented runs its
+          # realize handlers once in its lifetime, then its map handlers once
+          # per presentation; all realize handlers run before the first map
+          # handler. A widget that stops being presented, with everything under
+          # it, becomes unmapped without a signal. Showing or hiding a widget,
+          # presenting or hiding a window, and adding a child or a notebook
+          # page end here. Setting a notebook action widget or a submenu does
+          # not. A handler of the transition may add or show further widgets
+          # under a widget that is not mapped yet; they are gathered again once
+          # the map handlers have run, until none is left, so they are mapped
+          # by the same transition.
+          # @yield between the first realize handlers and the map handlers,
+          #   only when this widget itself becomes mapped
+          # @return [void]
+          # @api private
+          def refresh_mapped
+            session.synchronize do
+              next leave_map unless map_ready?
+              next if mapped?
+
+              first = true
+              loop do
+                arriving = collect_arriving([])
+                arriving.each { |widget| widget.send(:realize_once) }
+                yield if first && block_given?
+                first = false
+                break if arriving.count { |widget| widget.send(:enter_map) }.zero?
+              end
+            end
+            nil
+          end
+
+          # Reports whether nothing keeps this widget from being presented. An
+          # ordinary widget must be shown and needs a mapped parent; a window
+          # overrides this.
+          # @return [Boolean] whether the widget should be mapped now
+          # @api private
+          def map_ready? = visible? && !parent.nil? && parent.mapped?
+
+          # Gathers, parents first, the widgets of this subtree that are shown
+          # but not mapped. A widget that is not shown keeps its whole subtree
+          # out; one that is already mapped is passed through, so a widget
+          # added under it during the transition is still found.
+          # @param into [Array<Widget>] accumulator
+          # @return [Array<Widget>] the accumulator
+          # @api private
+          def collect_arriving(into)
+            return into unless visible?
+
+            into << self unless mapped?
+            owned_children.each { |child| child.send(:collect_arriving, into) }
+            into
+          end
+
+          # Runs realize handlers the first time this widget is presented.
+          # @return [void]
+          # @api private
+          def realize_once
+            return if @realized || destroyed?
+
+            @realized = true
+            emit_handlers(:realize)
+            nil
+          end
+
+          # Marks this widget mapped and runs its map handlers, unless a handler
+          # that ran earlier in the same transition hid or removed it.
+          # @return [Boolean] whether this call mapped the widget
+          # @api private
+          def enter_map
+            return false if mapped? || !map_ready?
+
+            @mapped = true
+            emit_handlers(:map)
+            true
+          end
+
+          # Marks this widget and its descendants unmapped. No signal is
+          # delivered; the next presentation maps them again.
+          # @return [void]
+          # @api private
+          def leave_map
+            return unless @mapped
+
+            @mapped = false
+            owned_children.each { |child| child.send(:leave_map) }
+            nil
+          end
+          private :refresh_mapped, :map_ready?, :collect_arriving, :realize_once, :enter_map, :leave_map
 
           # Opts out of recursive show_all; explicit show/hide still work.
           # @param value [Boolean] explicit boolean preference for this operation
           # @return [void] result is not part of the supported script contract
           def no_show_all=(value)
             session.refuse(self, :no_show_all=) unless [true, false].include?(value)
-            write(:hidden, true) if value && !visible? && !is_a?(Window)
+            if value && !visible? && !is_a?(Window)
+              write(:hidden, true)
+              refresh_mapped
+            end
             @no_show_all = value
           end
           alias set_no_show_all no_show_all=
@@ -79,9 +182,12 @@ module Lich
           def no_show_all? = @no_show_all == true
 
           # Hides widget content without discarding its input or destroying its owner.
+          # The widget and everything under it stop being mapped.
           # @return [Widget] self
           def hide
             write(:hidden, true)
+            refresh_mapped
+            self
           end
 
           # Shows this widget and every shadow descendant.

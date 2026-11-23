@@ -209,11 +209,16 @@ module Lich
             end
           end
 
-          # Serializes child removal with single-child admission.
+          # Serializes child removal with single-child admission. Removing the
+          # caption Label leaves an empty button whose next label write is shown.
           # @param child [Widget] same-session child governed by this container
           # @return [Button] self
           def remove(child)
-            session.synchronize { super }
+            session.synchronize do
+              super
+              @caption_child = nil if child.equal?(@caption_child)
+              self
+            end
           end
 
           # GTK requests are minima. Keep action text free to grow with the
@@ -241,6 +246,43 @@ module Lich
             session.refuse(self, :receives_default=) unless value == true
           end
           alias set_receives_default receives_default=
+
+          # The browser has no window-wide default button; the request is
+          # retained only and logged once.
+          # @param value [Boolean] whether this button may become the default
+          # @return [void]
+          def can_default=(value)
+            session.refuse(self, :can_default=) unless [true, false].include?(value)
+            session.degrade(:can_default, 'the browser has no default button; Enter acts on the focused control', receiver: self) if value
+          end
+          alias set_can_default can_default=
+
+          # Emits clicked as GTK's gtk_button_clicked does, running handlers now.
+          # @return [nil]
+          def clicked
+            session.style_operation(self, :clicked) { session.refuse(self, :clicked) if destroyed? }
+            emit_handlers(:activate, signal: 'clicked')
+            nil
+          end
+
+          # GTK places a caption Label inside a labelled button. The first read
+          # moves the caption into a real child Label so later text and markup
+          # changes on it update the button. From then on that Label holds the
+          # caption: {#label} reads it and {#label=} writes it, until the Label
+          # is removed or destroyed.
+          # @return [Label, Widget, nil] the child, or nil for an empty button
+          def child
+            session.synchronize do
+              return @children.first unless @children.empty?
+              return nil if label.to_s.empty?
+
+              caption = Label.new(label)
+              write(:label, '')
+              add(caption)
+              @caption_child = caption
+            end
+          end
+
           # Creates a literal action label, removing mnemonic underscores when requested.
           # Stock-button IDs are unsupported; no native GTK stock catalog is loaded.
           # @param text [String, nil] optional positional caption
@@ -255,20 +297,41 @@ module Lich
             @props[:label] = use_underline ? label.delete('_') : label
           end
 
-          # Reads the retained action label.
+          # Reads the action label from wherever the caption lives: the caption
+          # Label once {#child} has produced one, otherwise the retained text.
           # @return [String]
-          def label = read(:label)
+          def label
+            session.synchronize { caption_child ? caption_child.text : read(:label) }
+          end
 
-          # Writes literal action text through the shared button contract.
+          # Writes literal action text to wherever the caption lives, so the
+          # displayed caption and the value {#label} reads never differ.
           # @param value [Object] literal text converted with String before publication
           # @return [Button] self
           # @raise [UnsupportedOperation] for text that is not UTF-8 or binary-tagged UTF-8
           def label=(value)
-            write(:label, wire_literal(value, :label=))
+            text = wire_literal(value, :label=)
+            session.synchronize do
+              if caption_child
+                caption_child.text = text
+              else
+                write(:label, text)
+              end
+            end
+            self
           end
           alias set_label label=
 
           protected
+
+          # Stops treating a removed or destroyed caption Label as the caption.
+          # @param child [Widget] same-session child governed by this container
+          # @return [void] result is not part of the supported script contract
+          # @api private
+          def forget_child(child)
+            @caption_child = nil if child.equal?(@caption_child)
+            super
+          end
 
           # Selects the shared component type for this compatibility object.
           # @return [Symbol] shared component type
@@ -278,6 +341,15 @@ module Lich
           # @return [Hash{String => Symbol}] accepted GTK signals and shared events
           # @api private
           def signal_map = { 'clicked' => :activate }
+
+          private
+
+          # The Label that {#child} produced, while it is still this button's child.
+          # @return [Label, nil] live caption Label, or nil when the retained text is the caption
+          # @api private
+          def caption_child
+            @caption_child if @caption_child && @children.first.equal?(@caption_child) && !@caption_child.destroyed?
+          end
         end
 
         # Individually placed radio members share a same-owner group and real radio inputs.
@@ -307,6 +379,34 @@ module Lich
           # Returns a snapshot suitable for the legacy group constructor.
           # @return [Array<RadioButton>]
           def group = @group.dup
+
+          # Moves this member into another member's group, or into a group of
+          # its own for nil, before the page is built. GTK keeps one member of
+          # the new group active, so a joining member starts inactive.
+          # @param source [RadioButton, nil] member of the destination group
+          # @return [RadioButton] self
+          # @raise [UnsupportedOperation] for a foreign source or a built control
+          def join_group(source)
+            session.style_operation(self, :join_group) do
+              valid = source.nil? || (source.is_a?(RadioButton) && source.session.equal?(session) && !source.destroyed?)
+              session.refuse(self, :join_group) unless valid && !destroyed? && @handle.nil?
+              return self if source && source.group.include?(self)
+
+              @group.delete(self)
+              @group.first&.send(:write, :checked, true) if @group.none?(&:active?) && read(:checked)
+              if source
+                @group = source.instance_variable_get(:@group)
+                write(:group, source.send(:read, :group))
+                write(:checked, false)
+              else
+                @group = []
+                write(:group, "radio-#{object_id}")
+                write(:checked, true)
+              end
+              @group << self
+            end
+            self
+          end
 
           # Retires group membership before destroyed controls can be selected again.
           # @return [void]

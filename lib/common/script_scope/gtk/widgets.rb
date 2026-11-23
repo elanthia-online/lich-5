@@ -238,6 +238,7 @@ module Lich
             @children.insert(index, child)
             session.refresh_label_styles
             refresh_layout!
+            map_attached(child)
             self
           end
           private :insert_child

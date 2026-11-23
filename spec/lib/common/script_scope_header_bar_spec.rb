@@ -107,7 +107,7 @@ RSpec.describe 'HeaderBar and tpick titlebar acceptance' do
     expect(entry.instance_variable_get(:@placement)).to include(column: 1, row: 1)
     expect(entry.text).to eq('Retained value')
     invalid = gtk::Label.new('Invalid')
-    [[-25, 0, 1, 1], [0, -4097, 1, 1], [0, 0, 0, 1], [0, 0, 1, 1025], ['bad', 0, 1, 1]].each do |coordinates|
+    [[-65, 0, 1, 1], [0, -4097, 1, 1], [0, 0, 0, 1], [0, 0, 1, 1025], ['bad', 0, 1, 1]].each do |coordinates|
       expect { grid.attach(invalid, *coordinates) }.to raise_error(gtk::UnsupportedOperation)
       expect(invalid.parent).to be_nil
       expect(grid.children).to eq([entry])

@@ -46,6 +46,7 @@ module Lich
         collection: 512,
         table_rows: 10_000,
         table_columns: 64,
+        grid_columns: 64,
         children: 1024,
         components: 20_000,
         tree_depth: 64,
