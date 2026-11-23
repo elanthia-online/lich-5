@@ -17,6 +17,8 @@ require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 # real implementation. This is idempotent -- in the combined suite gameobj_spec
 # has already loaded it -- and mirrors how gameobj_spec obtains the real class.
 require_relative '../../../../lib/common/gameobj'
+# The room players examples feed XMLParser first, as Games#process_xml_data does.
+require_relative '../../../../lib/common/xmlparser'
 
 # Stub DRBanking to avoid loading its dependencies
 module Lich
@@ -837,6 +839,9 @@ RSpec.describe Lich::DragonRealms::DRParser do
       %i[npcs dead_npcs room_objs pcs pcs_prone pcs_sitting].each do |field|
         allow(drroom_class).to receive(:"#{field}=") { |value| assigned[field] = value }
       end
+      # DRParser reads linked players from GameObj.pcs; start each example without
+      # another example's list.
+      Lich::Common::GameObj.clear_pcs
       # parse calls the drdefs room helpers unqualified; production reaches them
       # because main.rb includes Lich::DragonRealms into Object. Route them to the
       # real implementations here without including the module globally.
@@ -913,17 +918,77 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(saga[:pcs]).to eq(%w[Aldric Brenna Corwin Delphine])
       end
 
-      # The names come from the links on the server line; match_line has stripped
-      # them from the line the patterns see. Before the fix this line gave
-      # %w[smoke Brenna] (the post string's last word) and lost Delphine and
-      # Corwin behind the " and " inside the first post string.
-      it 'reads DRRoom.pcs from the links when post strings defeat the text split' do
-        line = "<component id='room players'>Also here: Goblin Bait <a exist=\"-10700002\" noun=\"Aldric\">Aldric</a> " \
-               "whose form wavers within a roiling cloud of grey smoke, Daydreamer <a exist=\"-10700003\" noun=\"Brenna\">Brenna</a> " \
-               "who is coated in soot and wrapped in a cloud of ash, <a exist=\"-10700005\" noun=\"Delphine\">Delphine</a> (prone) " \
-               "and Druid <a exist=\"-10700004\" noun=\"Corwin\">Corwin</a> who is sitting.</component>"
+      # Production order: Games#process_xml_data runs XMLParser (which fills
+      # GameObj.pcs from the links) on the server string before DRParser.parse.
+      def parse_room_via_xml(line)
+        parser = Lich::Common::XMLParser.new
+        parser.instance_variable_set(:@game, 'DR')
+        Ox.sax_parse(parser, line, convert_special: false, symbolize: false, skip: :skip_none)
+        parse_room(line)
+      end
 
-        expect(parse_room(line)).to eq(pcs: %w[Aldric Brenna Delphine Corwin], pcs_prone: ['Delphine'], pcs_sitting: ['Corwin'])
+      def link(name, id) = %(<a exist="-#{id}" noun="#{name}">#{name}</a>)
+
+      # Post strings are free text. On base the text split gave
+      # %w[smoke Brenna ash Corwin], with Corwin both prone and sitting. Nothing in
+      # "whose form wavers ..." matched PLAYER_STATUS, so its last word became the
+      # name. normalize_trailing_and rewrote the first " and " (inside Brenna's
+      # post string), so "ash" became an entry, and the real final " and " was
+      # never split, so Delphine fused with Corwin and was lost.
+      let(:free_text_line) do
+        "<component id='room players'>Also here: Goblin Bait #{link('Aldric', 10700002)} " \
+          "whose form wavers within a roiling cloud of grey smoke, Daydreamer #{link('Brenna', 10700003)} " \
+          "who is coated in soot and wrapped in a cloud of ash, #{link('Delphine', 10700005)} (prone) " \
+          "and Druid #{link('Corwin', 10700004)} who is sitting.</component>"
+      end
+
+      context 'with GameObj.pcs filled by XMLParser' do
+        before do
+          allow(XMLData).to receive(:game).and_return('DR')
+          Lich::Common::GameObj.clear_pcs
+        end
+
+        after { Lich::Common::GameObj.clear_pcs }
+
+        it 'takes names and posture from GameObj.pcs when post strings defeat the text split' do
+          expect(parse_room_via_xml(free_text_line))
+            .to eq(pcs: %w[Aldric Brenna Delphine Corwin], pcs_prone: ['Delphine'], pcs_sitting: ['Corwin'])
+        end
+
+        # XMLParser's status for "who is lying down and Reader <link>" is
+        # "lying down and Reader "; only the posture word counts.
+        it 'reads posture from a status that carries the next player\'s title' do
+          line = "<component id='room players'>Also here: #{link('Aldric', 1)} who is lying down and " \
+                 "Reader #{link('Brenna', 2)} who is sitting and Doctor #{link('Corwin', 3)}.</component>"
+          expect(parse_room_via_xml(line)).to eq(pcs: %w[Aldric Brenna Corwin], pcs_prone: ['Aldric'], pcs_sitting: ['Brenna'])
+        end
+
+        # XMLParser reads attributes by name, so their order does not matter. The
+        # first post string defeats the text split, so only GameObj.pcs passes.
+        it 'reads a link whose noun attribute comes before exist' do
+          line = "<component id='room players'>Also here: Lord #{link('Aldric', 1)} whose form wavers within smoke, " \
+                 "<a noun=\"Brenna\" exist=\"-2\">Brenna</a> (prone) and #{link('Corwin', 3)}.</component>"
+          expect(parse_room_via_xml(line)).to eq(pcs: %w[Aldric Brenna Corwin], pcs_prone: ['Brenna'], pcs_sitting: [])
+        end
+
+        it 'takes the name from the noun attribute, not the link text' do
+          line = "<component id='room players'>Also here: Lord <a exist=\"-1\" noun=\"Aldric\">Aldric the Bold</a>.</component>"
+          expect(parse_room_via_xml(line)[:pcs]).to eq(['Aldric'])
+        end
+
+        it 'splits a legacy (link-free) line as text even when GameObj.pcs holds a linked list' do
+          parse_room_via_xml(free_text_line)
+
+          expect(parse_room(legacy_players)[:pcs]).to eq(%w[Aldric Brenna Corwin Delphine])
+        end
+
+        # GameObj.pcs from an earlier line (XMLParser did not register this one)
+        # has a different count, so it is not used for this line.
+        it 'splits as text when GameObj.pcs does not hold this line\'s players' do
+          parse_room_via_xml("<component id='room players'>Also here: #{link('Eamon', 9)}.</component>")
+
+          expect(parse_room(saga_players)[:pcs]).to eq(%w[Aldric Brenna Corwin Delphine])
+        end
       end
 
       it 'clears pcs_prone and pcs_sitting with pcs when the room empties' do
