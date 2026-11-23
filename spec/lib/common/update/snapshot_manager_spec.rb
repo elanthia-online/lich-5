@@ -120,6 +120,61 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
     messages
   end
 
+  describe '.declared_version' do
+    def version_of(content)
+      path = File.join(root, 'version.rb')
+      File.write(path, content)
+      described_class.declared_version(path)
+    end
+
+    it 'reads the assignment, not a comment above it that mentions one' do
+      expect(version_of("# Example: LICH_VERSION = '6.0.0'\nLICH_VERSION = 'v6'\n")).to eq('v6')
+    end
+
+    it 'reads an assignment on line 1 behind a UTF-8 byte-order mark, as Ruby runs it' do
+      expect(version_of("#{described_class::UTF8_BOM}LICH_VERSION = '5.25.0'\n".b)).to eq('5.25.0')
+    end
+
+    it 'reverts a snapshot whose lib/version.rb starts with a byte-order mark' do
+      install('5.22.0')
+      dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+      File.binwrite(File.join(dir, 'lib', 'version.rb'), "#{described_class::UTF8_BOM}LICH_VERSION = '5.21.0'\n".b)
+      allow(Lich::Util::Update).to receive(:clear_branch_tracking)
+
+      manager.revert
+
+      expect(File.binread(File.join(LIB_DIR, 'version.rb'))).to start_with(described_class::UTF8_BOM)
+    end
+
+    # Forms some forks' version files use, which main's reader accepted.
+    {
+      'an assignment split across lines'            => "LICH_VERSION =\n  '5.21.0'\n",
+      'a qualified constant'                        => "::LICH_VERSION = '5.21.0'\n",
+      'a split assignment behind a byte-order mark' => "#{described_class::UTF8_BOM}LICH_VERSION =\n  '5.21.0'\n".b
+    }.each do |form, content|
+      it "reverts a snapshot main wrote with #{form}" do
+        install('5.22.0')
+        dir = make_snapshot('2026-10-01-00-00-00', '5.21.0')
+        File.binwrite(File.join(dir, 'lib', 'version.rb'), content)
+        allow(Lich::Util::Update).to receive(:clear_branch_tracking)
+        messages = capture_responses
+
+        manager.revert
+
+        expect(File.binread(File.join(LIB_DIR, 'version.rb'))).to eq(content)
+        expect(messages).to include('Lich5 has been reverted to Lich5 version 5.21.0')
+      end
+    end
+
+    it 'prefers an assignment at the start of a line to an earlier comment that mentions one' do
+      expect(version_of("# was LICH_VERSION = '1.0.0'\nLICH_VERSION = '5.25.0'\n")).to eq('5.25.0')
+    end
+
+    it 'reads an indented assignment, as in a module body' do
+      expect(version_of("module Lich\n  LICH_VERSION = '5.25.0'\nend\n")).to eq('5.25.0')
+    end
+  end
+
   describe '#new_data_backup_dir' do
     it 'uses a prefix that #revert\'s snapshot glob cannot match' do
       data_backup_dir = manager.new_data_backup_dir
@@ -252,6 +307,58 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
 
       expect(tree(File.join(dir, 'lib'))).to eq(tree(LIB_DIR))
       expect(Dir.children(dir).sort).to eq([lich_name, 'lib', 'scripts', described_class::STAGED_MARKER_NAME].sort)
+    end
+
+    it 'keeps every top-level file an update overwrites except Gemfile.lock' do
+      expect(described_class::SNAPSHOT_TOP_LEVEL_FILES).to eq(Lich::Util::Update::ReleaseInstaller::TOP_LEVEL_FILES - %w[Gemfile.lock])
+    end
+
+    it 'copies Gemfile and LICENSE but never Gemfile.lock, which no Lich archive ships' do
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      write(File.join(LICH_DIR, 'Gemfile.lock'), "# lock 5.22.0\n")
+      write(File.join(LICH_DIR, 'LICENSE'), "# LICENSE\n")
+
+      dir = manager.snapshot
+
+      expect(File.read(File.join(dir, 'Gemfile'))).to eq("# Gemfile 5.22.0\n")
+      expect(File.read(File.join(dir, 'LICENSE'))).to eq("# LICENSE\n")
+      expect(File.exist?(File.join(dir, 'Gemfile.lock'))).to be(false)
+    end
+
+    it 'skips a top-level directory, dangling link or unreadable file instead of failing' do
+      skip_unless_permissions_enforced
+      skip 'symlinks are not available on this platform' unless symlinks_supported?
+      write(File.join(LICH_DIR, 'LICENSE', 'notice.txt'), "# notice\n")
+      File.symlink(File.join(root, 'missing'), File.join(LICH_DIR, 'Gemfile.lock'))
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile\n")
+      File.chmod(0o000, File.join(LICH_DIR, 'Gemfile'))
+
+      dir = manager.snapshot
+
+      expect(%w[Gemfile Gemfile.lock LICENSE].select { |file| File.exist?(File.join(dir, file)) }).to be_empty
+    end
+
+    it 'copies the bytes of a linked top-level file' do
+      skip 'symlinks are not available on this platform' unless symlinks_supported?
+      write(File.join(root, 'checkout', 'Gemfile'), "# linked Gemfile\n")
+      File.symlink(File.join(root, 'checkout', 'Gemfile'), File.join(LICH_DIR, 'Gemfile'))
+
+      dir = manager.snapshot
+
+      expect(File.symlink?(File.join(dir, 'Gemfile'))).to be(false)
+      expect(File.read(File.join(dir, 'Gemfile'))).to eq("# linked Gemfile\n")
+    end
+
+    it 'is not restored by #revert, which leaves the live top-level files as they are' do
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      manager.snapshot
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile other\n")
+      write(File.join(LICH_DIR, 'Gemfile.lock'), "# lock other\n")
+
+      manager.revert
+
+      expect(File.read(File.join(LICH_DIR, 'Gemfile'))).to eq("# Gemfile other\n")
+      expect(File.read(File.join(LICH_DIR, 'Gemfile.lock'))).to eq("# lock other\n")
     end
 
     it 'marks the snapshot as staged, so #revert never treats it as an older Lich\'s' do
@@ -891,6 +998,17 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(revert_temp_dirs + checkout_temp_dirs).to be_empty
       end
 
+      it 'restores a snapshot when the install root is read-only and the launcher is linked out of it' do
+        skip_unless_permissions_enforced
+        File.chmod(0o555, LICH_DIR)
+
+        manager.revert
+
+        File.chmod(0o755, LICH_DIR)
+        expect(File.read(target)).to eq("# lich 5.21.0\n")
+        expect(File.read(File.join(LIB_DIR, 'version.rb'))).to eq("LICH_VERSION = '5.21.0'\n")
+      end
+
       it 'replaces a dangling link with the snapshot\'s launcher so Lich can start' do
         File.delete(target)
 
@@ -900,6 +1018,17 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
         expect(File.read(live_lich)).to eq("# lich 5.21.0\n")
         expect(revert_temp_dirs).to be_empty
       end
+    end
+
+    it 'leaves a LICENSE directory and its contents alone across a snapshot and revert' do
+      write(File.join(LICH_DIR, 'Gemfile'), "# Gemfile 5.22.0\n")
+      write(File.join(LICH_DIR, 'LICENSE', 'notice.txt'), "# notice\n")
+      manager.snapshot
+
+      manager.revert
+
+      expect(File.read(File.join(LICH_DIR, 'LICENSE', 'notice.txt'))).to eq("# notice\n")
+      expect(File.read(File.join(LICH_DIR, 'Gemfile'))).to eq("# Gemfile 5.22.0\n")
     end
 
     it 'makes lib/ exactly the snapshot\'s lib/, hidden top-level files included' do

@@ -38,6 +38,8 @@ concurrency:
 
 jobs:
   stable:
+    # Forks inherit this workflow but not the org App secrets; run only upstream.
+    if: ${{ github.repository == 'elanthia-online/lich-5' }}
     runs-on: ubuntu-latest
     steps:
       - name: "Guard: require main as target"
