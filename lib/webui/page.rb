@@ -224,6 +224,14 @@ module Lich
         "#<#{self.class.name} owner=#{owner_label.to_s.inspect} id=#{id.inspect} title=#{title.inspect}>"
       end
 
+      # Serializes as the same bounded summary as inspect, so YAML never walks
+      # the bound runtime, viewer graph, shared values and last render.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
+      end
+
       # Reads a server-owned override, falling back to the rendered property.
       # @return [Object] override or fallback
       # @api private

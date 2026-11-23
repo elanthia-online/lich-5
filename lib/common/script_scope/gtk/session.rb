@@ -42,6 +42,23 @@ module Lich
             Lich.log(notice)
           end
 
+          # Names this session by class and a bounded, single-line owner label
+          # only. The default inspect would walk the host port and the widget
+          # shadow state. Ruby's pp prints through it too.
+          # @return [String] bounded inspection text
+          def inspect
+            diagnostics = Lich::WebUI::Diagnostics
+            "#<#{self.class.name} owner=#{diagnostics.display_label(diagnostics.owner_label(@owner)).inspect}>"
+          end
+
+          # Serializes as the same opaque summary as inspect, so YAML never walks
+          # the host objects behind it.
+          # @param coder [Psych::Coder] coder receiving the scalar
+          # @return [void]
+          def encode_with(coder)
+            coder.scalar = inspect
+          end
+
           # Runs shadow-state work under the reentrant session monitor.
           # @yield operation requiring consistent widget state
           # @return [Object] block result

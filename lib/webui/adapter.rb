@@ -52,6 +52,15 @@ module Lich
         # @api private
         def inspect = '#<Lich::WebUI::Adapter::Handle opaque>'
         alias to_s inspect
+
+        # Serializes as the same opaque summary as inspect, so YAML never walks
+        # the node, page and viewer state behind the token.
+        # @param coder [Psych::Coder] coder receiving the scalar
+        # @return [void]
+        # @api private
+        def encode_with(coder)
+          coder.scalar = inspect
+        end
       end
       private_constant :Handle
 
@@ -81,6 +90,22 @@ module Lich
         @focus_sequence = 0
         @dirty_roots = {}.compare_by_identity
         @mutex = Monitor.new
+      end
+
+      # Names this port by class and a bounded, single-line owner label only. The
+      # default inspect would walk the host service and every retained node.
+      # Ruby's pp prints through it too.
+      # @return [String] bounded inspection text
+      def inspect
+        "#<#{self.class.name} owner=#{Diagnostics.display_label(owner_label).inspect}>"
+      end
+
+      # Serializes as the same opaque summary as inspect, so YAML never walks
+      # the host objects behind it.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
       end
 
       # Validates a component and allocates an opaque handle without opening a window.

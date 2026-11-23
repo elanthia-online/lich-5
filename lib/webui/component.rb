@@ -50,6 +50,14 @@ module Lich
         "#<#{self.class.name} #{fields.map { |name, value| "#{name}=#{value.inspect}" }.join(', ')}>"
       end
 
+      # Serializes as the same redacted text as inspect, so YAML never prints a
+      # sensitive input's value from this node or its children.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
+      end
+
       # Visits this node before its children, preserving child order.
       # @yield [component] each node in depth-first order
       # @yieldparam component [Component] visited node

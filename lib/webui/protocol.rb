@@ -12,16 +12,24 @@ module Lich
       # bigshot Builder setup page (2.23 MiB) renders. Temporary: when the GTK3 script
       # compatibility layer is removed, delete this and bound renders by MAX_MESSAGE_BYTES.
       MAX_RENDER_BYTES = 4 * 1024 * 1024
-      TYPES = %w[attach detach event].freeze
+      # Largest integer a browser represents exactly.
+      MAX_SAFE_INTEGER = 9_007_199_254_740_991
+      # A browser failure report names an error class and script positions only.
+      CLIENT_ERROR_NAME = /\A[A-Za-z][A-Za-z0-9]{0,63}\z/
+      CLIENT_ERROR_FRAME = /\A[a-z0-9_]{1,48}\.js:[0-9]{1,7}:[0-9]{1,7}\z/
+      CLIENT_ERROR_FRAMES = 8
+      TYPES = %w[attach detach event client_error].freeze
       FIELDS = {
-        'attach' => %i[type page version resume],
-        'detach' => %i[type page generation geometry],
-        'event'  => %i[type page cid event generation payload submission request],
+        'attach'       => %i[type page version resume],
+        'detach'       => %i[type page generation geometry],
+        'event'        => %i[type page cid event generation payload submission request],
+        'client_error' => %i[type page generation error frames],
       }.freeze
       REQUIRED = {
-        'attach' => %i[type page version],
-        'detach' => %i[type page generation],
-        'event'  => %i[type page cid event generation],
+        'attach'       => %i[type page version],
+        'detach'       => %i[type page generation],
+        'event'        => %i[type page cid event generation],
+        'client_error' => %i[type page generation error],
       }.freeze
 
       class Refusal < Error
@@ -158,6 +166,11 @@ module Lich
       end
       private_class_method :validate_common!
 
+      # Applies the checks specific to one message type after the common routing checks.
+      # @param message [Hash] parsed client envelope with an allowed type
+      # @return [void]
+      # @raise [Refusal] for an invalid field or an unsupported contract version
+      # @api private
       def validate_type!(message)
         case message[:type]
         when 'attach'
@@ -166,7 +179,7 @@ module Lich
             raise Refusal.new(:malformed, 'resume token has invalid syntax')
           end
         when 'event'
-          if message.key?(:request) && !(message[:request].is_a?(Integer) && message[:request].between?(1, 9_007_199_254_740_991))
+          if message.key?(:request) && !(message[:request].is_a?(Integer) && message[:request].between?(1, MAX_SAFE_INTEGER))
             raise Refusal.new(:malformed, 'request must be a positive safe integer')
           end
           unless message[:cid].is_a?(String) && message[:cid].match?(Contract::CID_PATTERN)
@@ -181,11 +194,39 @@ module Lich
           if message.key?(:submission) && !message[:submission].is_a?(Array)
             raise Refusal.new(:malformed, 'submission must be an ordered array')
           end
+        when 'client_error'
+          validate_client_error!(message)
         end
       rescue VersionError => error
         raise Refusal.new(:version, error.message)
       end
       private_class_method :validate_type!
+
+      # Bounds a browser failure report to its defined shape: a safe-integer
+      # generation, an error class name, and at most CLIENT_ERROR_FRAMES script
+      # positions of the form file.js:line:column. No free text is admitted.
+      # @param message [Hash] parsed client_error envelope
+      # @return [void]
+      # @raise [Refusal] for a mistyped, misshapen or oversized field
+      # @api private
+      def validate_client_error!(message)
+        unless message[:generation] <= MAX_SAFE_INTEGER
+          raise Refusal.new(:malformed, 'generation must be a positive safe integer')
+        end
+        unless message[:error].is_a?(String) && message[:error].match?(CLIENT_ERROR_NAME)
+          raise Refusal.new(:malformed, 'error must be an error class name')
+        end
+        return unless message.key?(:frames)
+
+        frames = message[:frames]
+        unless frames.is_a?(Array) && frames.size <= CLIENT_ERROR_FRAMES
+          raise Refusal.new(:malformed, "frames must be an array of at most #{CLIENT_ERROR_FRAMES} positions")
+        end
+        return if frames.all? { |frame| frame.is_a?(String) && frame.match?(CLIENT_ERROR_FRAME) }
+
+        raise Refusal.new(:malformed, 'frames must be script positions')
+      end
+      private_class_method :validate_client_error!
 
       # Freezes routing containers while preserving mutable secret-bearing leaf strings.
       # @return [Object] supplied value

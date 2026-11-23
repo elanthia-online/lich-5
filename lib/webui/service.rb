@@ -103,6 +103,22 @@ module Lich
         )
       end
 
+      # Names this host by class and lifecycle state only. The default inspect
+      # would walk the listener, runtime, registry and owned windows. Ruby's pp
+      # prints through it too.
+      # @return [String] bounded inspection text
+      def inspect
+        "#<#{self.class.name} stopped=#{@stopped.inspect}>"
+      end
+
+      # Serializes as the same opaque summary as inspect, so YAML never walks
+      # the host objects behind it.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
+      end
+
       # Starts the loopback server; a stopped service requires a new instance.
       # @return [Service] self
       # @raise [Error] once shutdown has begun

@@ -66,6 +66,22 @@ module Lich
         # @return [Hash] detached evidence of the read-only text delivered to this viewer
         def delivered_read_only = state_snapshot(@delivered_read_only)
 
+        # Names this viewer by class, identity and resume state only. The default
+        # inspect would print the resume token, values and page. Ruby's pp prints
+        # through it too.
+        # @return [String] bounded inspection text
+        def inspect
+          "#<#{self.class.name} viewer_id=#{viewer_id.inspect} resume_state=#{resume_state.inspect}>"
+        end
+
+        # Serializes as the same opaque summary as inspect, so YAML never prints
+        # the resume token or walks the state behind it.
+        # @param coder [Psych::Coder] coder receiving the scalar
+        # @return [void]
+        def encode_with(coder)
+          coder.scalar = inspect
+        end
+
         private
 
         # Store-only access; callers must hold the owning store monitor.
@@ -98,6 +114,23 @@ module Lich
         @by_connection = {}
         @by_resume = {}
         @mutex = Monitor.new
+      end
+
+      # Names this store by class and retained viewer count only. The default
+      # inspect would print every resume token and attachment. The count is read
+      # without the store monitor so inspection cannot block on it. Ruby's pp
+      # prints through it too.
+      # @return [String] bounded inspection text
+      def inspect
+        "#<#{self.class.name} attachments=#{@by_resume.size}>"
+      end
+
+      # Serializes as the same opaque summary as inspect, so YAML never prints
+      # the resume index or walks the attachments behind it.
+      # @param coder [Psych::Coder] coder receiving the scalar
+      # @return [void]
+      def encode_with(coder)
+        coder.scalar = inspect
       end
 
       # Attaches one viewer per connection/page pair, or resumes a disconnected one.
