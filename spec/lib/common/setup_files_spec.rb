@@ -372,6 +372,20 @@ RSpec.describe Lich::Common::SetupFiles do
       result = setup_files.get_settings
       expect(result.version).to eq(2)
     end
+
+    # Public return value kept as it was before the interrupt-safety change,
+    # for external scripts: the data scan's basename => winning path map.
+    it 'returns the data files it found, with scripts/data/custom winning' do
+      FileUtils.mkdir_p(custom_data_dir)
+      File.write(File.join(data_dir, 'base-town.yaml'), {}.to_yaml)
+      File.write(File.join(data_dir, 'base-spells.yaml'), {}.to_yaml)
+      File.write(File.join(custom_data_dir, 'base-town.yaml'), {}.to_yaml)
+
+      expect(setup_files.reload).to eq(
+        'base-town.yaml'   => File.join(custom_data_dir, 'base-town.yaml'),
+        'base-spells.yaml' => File.join(data_dir, 'base-spells.yaml')
+      )
+    end
   end
 
   describe 'cascading includes' do

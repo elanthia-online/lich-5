@@ -91,6 +91,17 @@ module Lich
         @debug = debug
       end
 
+      # Loads one YAML file as a Hash. The file must be trusted: it is parsed
+      # with YAML.unsafe_load, which can instantiate arbitrary Ruby objects.
+      # A file that cannot be read or parsed, or whose top level is a scalar
+      # or a sequence, is reported to the client as
+      # "*** ERROR PARSING YAML FILE ***" plus the error message, and loads as
+      # an empty Hash. An empty or null document loads as an empty Hash
+      # without a report.
+      #
+      # @param filepath [String] path to the YAML file
+      # @return [Hash{Symbol => Object}] the top-level mapping with Symbol keys,
+      #   or {} after reporting a load error
       def safe_load_yaml(filepath)
         OpenStruct.new(YAML.unsafe_load(read_yaml_file(filepath), filename: filepath)).to_h
       rescue => e
@@ -151,6 +162,9 @@ module Lich
       end
 
       # Reloads cached files that have changed on disk.
+      #
+      # @return [Hash{String => String}] basename => path of every data file
+      #   found by the data-directory scan (see #load_files)
       def reload
         reload_profiles(character_suffixes_to_filenames(['setup']))
         reload_data
@@ -291,7 +305,8 @@ module Lich
       # caller had them.
       #
       # @param glob_patterns [Array<String>] glob patterns, highest precedence first
-      # @return [void]
+      # @return [Hash{String => String}] basename => winning path for every file found
+      # @api private
       def load_files(glob_patterns = [])
         synchronize do
           safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
@@ -331,8 +346,8 @@ module Lich
               cache_put_by_filepath(filepath, digest: current_digest)
             end
           end
+          current_files
         end
-        nil
       end
 
       # Runs the block with Thread#kill and Thread#raise deferred until it
@@ -354,6 +369,7 @@ module Lich
       #
       # @yield the descriptor-opening call
       # @return [Object] the block's result
+      # @api private
       def without_interrupts(&block)
         Thread.handle_interrupt(Object => :never, &block)
       end
@@ -375,8 +391,9 @@ module Lich
       # UTF-8). Only the read is guarded (see #without_interrupts); parsing and
       # any parse-error message run outside the guard.
       #
-      # @param filepath [String]
+      # @param filepath [String] path to the YAML file
       # @return [String] file contents
+      # @api private
       def read_yaml_file(filepath)
         without_interrupts { File.read(filepath, mode: 'r:bom|utf-8') }
       end
@@ -384,7 +401,11 @@ module Lich
       # Content hash used as the cache freshness signal. Returns nil when the
       # file cannot be read (e.g. it vanished between the glob and here); a nil
       # digest never equals a stored digest, so the entry is treated as changed
-      # and reloaded on the next pass.
+      # and reloaded on the next pass. The read is guarded (see #without_interrupts).
+      #
+      # @param filepath [String] path to the file
+      # @return [String, nil] hex SHA256 of the contents, or nil if unreadable
+      # @api private
       def file_digest(filepath)
         without_interrupts { Digest::SHA256.file(filepath) }.hexdigest
       rescue => e

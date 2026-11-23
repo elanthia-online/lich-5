@@ -246,8 +246,9 @@ module Lich
       # then stays there as before, and the reset mask keeps it killable, so
       # the next write starts a replacement.
       #
-      # @param writer [Thread]
+      # @param writer [Thread] the newly started writer thread
       # @return [void]
+      # @api private
       def adopt_writer_thread(writer)
         ThreadGroup::Default.add(writer)
       rescue ThreadError
