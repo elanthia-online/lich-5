@@ -45,6 +45,8 @@ permissions:
 
 jobs:
   release:
+    # Forks inherit this workflow but not the org App secrets; run only upstream.
+    if: ${{ github.repository == 'elanthia-online/lich-5' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.rp.outputs.release_created }}
