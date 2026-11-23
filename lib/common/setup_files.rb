@@ -93,11 +93,11 @@ module Lich
 
       # Loads one YAML file as a Hash. The file must be trusted: it is parsed
       # with YAML.unsafe_load, which can instantiate arbitrary Ruby objects.
-      # A file that cannot be read or parsed, or whose top level is a scalar
-      # or a sequence, is reported to the client as
+      # A file that cannot be read or parsed, or whose top level is a sequence
+      # or a scalar other than null or false, is reported to the client as
       # "*** ERROR PARSING YAML FILE ***" plus the error message, and loads as
-      # an empty Hash. An empty or null document loads as an empty Hash
-      # without a report.
+      # an empty Hash. An empty document, or one whose top level is null or
+      # false, loads as an empty Hash without a report.
       #
       # @param filepath [String] path to the YAML file
       # @return [Hash{Symbol => Object}] the top-level mapping with Symbol keys,
