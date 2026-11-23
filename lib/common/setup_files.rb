@@ -91,8 +91,19 @@ module Lich
         @debug = debug
       end
 
+      # Loads one YAML file as a Hash. The file must be trusted: it is parsed
+      # with YAML.unsafe_load, which can instantiate arbitrary Ruby objects.
+      # A file that cannot be read or parsed, or whose top level is a sequence
+      # or a scalar other than null or false, is reported to the client as
+      # "*** ERROR PARSING YAML FILE ***" plus the error message, and loads as
+      # an empty Hash. An empty document, or one whose top level is null or
+      # false, loads as an empty Hash without a report.
+      #
+      # @param filepath [String] path to the YAML file
+      # @return [Hash{Symbol => Object}] the top-level mapping with Symbol keys,
+      #   or {} after reporting a load error
       def safe_load_yaml(filepath)
-        OpenStruct.new(YAML.unsafe_load_file(filepath)).to_h
+        OpenStruct.new(YAML.unsafe_load(read_yaml_file(filepath), filename: filepath)).to_h
       rescue => e
         safe_message("bold", "*** ERROR PARSING YAML FILE ***")
         safe_message("bold", e.message)
@@ -151,6 +162,9 @@ module Lich
       end
 
       # Reloads cached files that have changed on disk.
+      #
+      # @return [Hash{String => String}] basename => path of every data file
+      #   found by the data-directory scan (see #load_files)
       def reload
         reload_profiles(character_suffixes_to_filenames(['setup']))
         reload_data
@@ -274,15 +288,34 @@ module Lich
         include_order
       end
 
+      # Scans the given glob patterns and refreshes the cache to match disk:
+      # evicts entries whose file is gone, then loads new and changed files.
+      #
+      # Pattern precedence: patterns are scanned in order and the first file
+      # found for a basename wins, so earlier patterns (scripts/data/custom
+      # before scripts/data, see #get_data_glob_patterns) override later ones.
+      # Eviction only touches entries from the scanned directories whose names
+      # match one of the patterns.
+      #
+      # Interrupt deferral: each descriptor-opening call (Dir.glob here,
+      # File.read in #read_yaml_file, Digest in #file_digest) runs inside
+      # #without_interrupts, so a Thread#kill or Thread#raise that arrives
+      # mid-call is delivered as soon as that call returns. Everything else
+      # (logging, YAML parsing, error messages) runs with interrupts as the
+      # caller had them.
+      #
+      # @param glob_patterns [Array<String>] glob patterns, highest precedence first
+      # @return [Hash{String => String}] basename => winning path for every file found
+      # @api private
       def load_files(glob_patterns = [])
         synchronize do
           safe_log "#{self.class}::#{__callee__} glob_patterns=#{glob_patterns}" if @debug
           # Build a map of filename -> filepath for all files currently on disk
           current_files = {}
           glob_patterns.each do |glob_pattern|
-            Dir.glob(glob_pattern)
-               .select { |filepath| File.file?(filepath) }
-               .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
+            without_interrupts { Dir.glob(glob_pattern) }
+              .select { |filepath| File.file?(filepath) }
+              .each { |filepath| current_files[File.basename(filepath)] ||= filepath }
           end
 
           # Evict cache entries whose backing files no longer exist on disk.
@@ -313,7 +346,32 @@ module Lich
               cache_put_by_filepath(filepath, digest: current_digest)
             end
           end
+          current_files
         end
+      end
+
+      # Runs the block with Thread#kill and Thread#raise deferred until it
+      # returns. Use it only around a single call that opens and closes a
+      # descriptor. A thread killed inside Dir.glob or File.open can leak the
+      # descriptor: no Ruby object owns it yet, so GC never closes it. Script#kill
+      # stops script threads with Thread#kill, so a script stopped while loading
+      # settings leaked a scripts/profiles handle on every stop until the process
+      # hit its open-files limit.
+      #
+      # Keep the block to that one call. Threads inherit the mask of the thread
+      # that creates them, so anything that can start a thread inside the block
+      # (an error message reaching the client socket starts its writer) creates
+      # a thread that Thread#kill can never stop.
+      #
+      # Object, not Exception: the kill signal is not an Exception, so
+      # Exception => :never does not defer it. Called inside synchronize, so a
+      # thread still waiting for the monitor stays killable.
+      #
+      # @yield the descriptor-opening call
+      # @return [Object] the block's result
+      # @api private
+      def without_interrupts(&block)
+        Thread.handle_interrupt(Object => :never, &block)
       end
 
       def cache_put_by_filepath(filepath, digest: nil)
@@ -329,12 +387,27 @@ module Lich
         end
       end
 
+      # Reads a YAML file the way YAML.unsafe_load_file opens it (BOM-aware
+      # UTF-8). Only the read is guarded (see #without_interrupts); parsing and
+      # any parse-error message run outside the guard.
+      #
+      # @param filepath [String] path to the YAML file
+      # @return [String] file contents
+      # @api private
+      def read_yaml_file(filepath)
+        without_interrupts { File.read(filepath, mode: 'r:bom|utf-8') }
+      end
+
       # Content hash used as the cache freshness signal. Returns nil when the
       # file cannot be read (e.g. it vanished between the glob and here); a nil
       # digest never equals a stored digest, so the entry is treated as changed
-      # and reloaded on the next pass.
+      # and reloaded on the next pass. The read is guarded (see #without_interrupts).
+      #
+      # @param filepath [String] path to the file
+      # @return [String, nil] hex SHA256 of the contents, or nil if unreadable
+      # @api private
       def file_digest(filepath)
-        Digest::SHA256.file(filepath).hexdigest
+        without_interrupts { Digest::SHA256.file(filepath) }.hexdigest
       rescue => e
         safe_log "#{self.class}::#{__callee__} could not hash #{filepath}: #{e.message}" if @debug
         nil
