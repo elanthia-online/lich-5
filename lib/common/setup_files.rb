@@ -88,6 +88,7 @@ module Lich
       def initialize(debug = false)
         super()
         @files_cache = {}
+        @load_errors = {}
         @debug = debug
       end
 
@@ -103,10 +104,9 @@ module Lich
       # @return [Hash{Symbol => Object}] the top-level mapping with Symbol keys,
       #   or {} after reporting a load error
       def safe_load_yaml(filepath)
-        OpenStruct.new(YAML.unsafe_load(read_yaml_file(filepath), filename: filepath)).to_h
+        parse_yaml_file(filepath)
       rescue => e
-        safe_message("bold", "*** ERROR PARSING YAML FILE ***")
-        safe_message("bold", e.message)
+        report_load_error(e)
         {}
       end
 
@@ -324,9 +324,12 @@ module Lich
           # reload from evicting identically-named profile-dir entries.
           scan_dirs = glob_patterns.map { |p| File.dirname(p) }.uniq
           @files_cache.delete_if do |name, info|
-            scan_dirs.include?(info.path) &&
-              !current_files.key?(name) &&
-              glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
+            evict = scan_dirs.include?(info.path) &&
+                    !current_files.key?(name) &&
+                    glob_patterns.any? { |p| File.fnmatch(File.basename(p), name) }
+            # A removed file's load error is forgotten, so restoring it reports again.
+            @load_errors.delete(info.to_s) if evict
+            evict
           end
 
           current_files.each do |filename, filepath|
@@ -340,6 +343,9 @@ module Lich
             current_digest = file_digest(filepath)
             cached_file = cache_get_by_filename(filename)
             safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
+            # A load that failed was cached with a nil digest (see
+            # #cache_put_by_filepath), which differs from any readable file's
+            # digest, so it is retried here.
             if cached_file.nil? ||
                cached_file.path != File.dirname(filepath) ||
                cached_file.digest != current_digest
@@ -374,17 +380,71 @@ module Lich
         Thread.handle_interrupt(Object => :never, &block)
       end
 
+      # Loads a file into the cache. A load that fails is cached as {} with a
+      # nil digest, so the next scan that can read the file retries it instead
+      # of serving {} until the file changes. The failure may be transient: a read error such as
+      # Errno::EMFILE, or an exception another thread delivered with
+      # Thread#raise while the file was being parsed.
+      #
+      # @param filepath [String] path to the file
+      # @param digest [String, nil] its content digest, if already computed
+      # @return [FileInfo] the new cache entry
+      # @api private
       def cache_put_by_filepath(filepath, digest: nil)
         synchronize do
           safe_log "#{self.class}::#{__callee__} filepath=#{filepath}" if @debug
+          mtime = File.mtime(filepath)
+          digest ||= file_digest(filepath)
+          data = load_for_cache(filepath, digest)
           @files_cache[File.basename(filepath)] = FileInfo.new(
             path: File.dirname(filepath),
             name: File.basename(filepath),
-            mtime: File.mtime(filepath),
-            digest: digest || file_digest(filepath),
-            data: safe_load_yaml(filepath)
+            mtime: mtime,
+            digest: data ? digest : nil,
+            data: data || {}
           )
         end
+      end
+
+      # Parses a file for the cache. Because a failed load is retried on every
+      # scan, its error is reported once per file content and error, not on
+      # every retry: a file that stays malformed is reported once until it is
+      # edited, removed, or loads successfully.
+      #
+      # @param filepath [String] path to the file
+      # @param digest [String, nil] its content digest
+      # @return [Hash{Symbol => Object}, nil] the loaded mapping, or nil if loading failed
+      # @api private
+      def load_for_cache(filepath, digest)
+        data = parse_yaml_file(filepath)
+        @load_errors.delete(filepath)
+        data
+      rescue => e
+        failure = [digest, e.class, e.message]
+        report_load_error(e) unless @load_errors[filepath] == failure
+        @load_errors[filepath] = failure
+        nil
+      end
+
+      # Parses a YAML file into a Symbol-keyed Hash (see #safe_load_yaml).
+      #
+      # @param filepath [String] path to the YAML file
+      # @return [Hash{Symbol => Object}] the top-level mapping
+      # @raise [StandardError] if the file cannot be read or parsed, or its
+      #   top level is a sequence or a scalar other than null or false
+      # @api private
+      def parse_yaml_file(filepath)
+        OpenStruct.new(YAML.unsafe_load(read_yaml_file(filepath), filename: filepath)).to_h
+      end
+
+      # Reports a YAML load failure to the client.
+      #
+      # @param error [StandardError] the load failure
+      # @return [void]
+      # @api private
+      def report_load_error(error)
+        safe_message("bold", "*** ERROR PARSING YAML FILE ***")
+        safe_message("bold", error.message)
       end
 
       # Reads a YAML file the way YAML.unsafe_load_file opens it (BOM-aware
@@ -399,9 +459,9 @@ module Lich
       end
 
       # Content hash used as the cache freshness signal. Returns nil when the
-      # file cannot be read (e.g. it vanished between the glob and here); a nil
-      # digest never equals a stored digest, so the entry is treated as changed
-      # and reloaded on the next pass. The read is guarded (see #without_interrupts).
+      # file cannot be read (e.g. it vanished between the glob and here). An
+      # entry stored with a nil digest is reloaded on the first pass that can
+      # read the file again (see #load_files). The read is guarded (see #without_interrupts).
       #
       # @param filepath [String] path to the file
       # @return [String, nil] hex SHA256 of the contents, or nil if unreadable

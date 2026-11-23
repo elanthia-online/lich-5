@@ -234,7 +234,7 @@ RSpec.describe Lich::Common::SetupFiles do
       stub_const('FlakyDump', flaky_class)
       allow(Lich).to receive(:log)
       flaky = FlakyDump.new(1)
-      allow(setup_files).to receive(:safe_load_yaml).and_wrap_original do |original, filepath|
+      allow(setup_files).to receive(:parse_yaml_file).and_wrap_original do |original, filepath|
         loaded = original.call(filepath)
         if File.basename(filepath) == 'TestChar-setup.yaml'
           loaded[:flaky] = flaky
@@ -265,7 +265,7 @@ RSpec.describe Lich::Common::SetupFiles do
       stub_const('FlakyDump', flaky_class)
       allow(Lich).to receive(:log)
       flaky = FlakyDump.new(1)
-      allow(setup_files).to receive(:safe_load_yaml).and_wrap_original do |original, filepath|
+      allow(setup_files).to receive(:parse_yaml_file).and_wrap_original do |original, filepath|
         loaded = original.call(filepath)
         if File.basename(filepath) == 'base-spells.yaml'
           loaded[:flaky] = flaky
@@ -421,9 +421,118 @@ RSpec.describe Lich::Common::SetupFiles do
 
     it 'does not re-read unchanged files' do
       setup_files.get_settings
-      # Spy on safe_load_yaml to verify it's not called again
-      expect(setup_files).not_to receive(:safe_load_yaml).with(File.join(profiles_dir, 'base.yaml'))
+      # Spy on the cache's parser to verify the file is not parsed again
+      expect(setup_files).not_to receive(:parse_yaml_file).with(File.join(profiles_dir, 'base.yaml'))
       setup_files.get_settings
+    end
+  end
+
+  # A load that fails is retried on the next scan instead of being cached as {}
+  # until the file changes (issue #2485). Its error is reported once per file
+  # content and error, so a file that stays malformed is not reported on
+  # every retry.
+  describe 'failed loads' do
+    let(:setup_path) { File.join(profiles_dir, 'TestChar-setup.yaml') }
+    let(:reports) { [] }
+
+    before do
+      File.write(File.join(profiles_dir, 'base.yaml'), { version: 1 }.to_yaml)
+      File.write(setup_path, { hometown: 'Crossing' }.to_yaml)
+      allow(Lich::Messaging).to receive(:msg) { |_type, text| reports << text }
+    end
+
+    def parse_error_reports
+      reports.count('*** ERROR PARSING YAML FILE ***')
+    end
+
+    # Makes the next `times` reads of TestChar-setup.yaml raise `error`.
+    def fail_setup_reads(error, times: 1)
+      remaining = times
+      allow(File).to receive(:read).and_wrap_original do |original, path, *args, **kwargs|
+        if path.to_s == setup_path && remaining.positive?
+          remaining -= 1
+          raise error
+        end
+        original.call(path, *args, **kwargs)
+      end
+    end
+
+    it 'reloads a file whose parse was interrupted by Thread#raise' do
+      entered = Queue.new
+      release = Queue.new
+      blocked = false
+      allow(YAML).to receive(:unsafe_load).and_wrap_original do |original, content, **kwargs|
+        if !blocked && kwargs[:filename] == setup_path
+          blocked = true
+          entered << :parsing
+          release.pop
+        end
+        original.call(content, **kwargs)
+      end
+      thread = Thread.new { setup_files.reload }
+      thread.report_on_exception = false
+      expect(entered.pop(timeout: 5)).to eq(:parsing)
+      thread.raise(RuntimeError, 'stop requested')
+      release << :go
+      expect(thread.join(5)).to eq(thread)
+
+      expect(setup_files.get_settings.hometown).to eq('Crossing')
+    end
+
+    it 'reloads a file after a transient read error' do
+      fail_setup_reads(Errno::EMFILE.new(setup_path))
+      expect(setup_files.get_settings.hometown).to be_nil
+      expect(reports).to include(a_string_matching(/Too many open files/))
+
+      expect(setup_files.get_settings.hometown).to eq('Crossing')
+    end
+
+    it 'serves an empty profile while the file stays malformed' do
+      File.write(setup_path, "hometown: [Crossing\n")
+      2.times { expect(setup_files.get_settings.hometown).to be_nil }
+    end
+
+    it 'reports a file that stays malformed once, not on every scan' do
+      File.write(setup_path, "hometown: [Crossing\n")
+      3.times { setup_files.get_settings }
+      expect(parse_error_reports).to eq(1)
+    end
+
+    it 'reports again when the malformed file is edited and still malformed' do
+      File.write(setup_path, "hometown: [Crossing\n")
+      setup_files.get_settings
+      File.write(setup_path, "hometown: [Shard\n")
+      setup_files.get_settings
+      expect(parse_error_reports).to eq(2)
+    end
+
+    it 'reports again when a removed malformed file is restored' do
+      File.write(setup_path, "hometown: [Crossing\n")
+      setup_files.get_settings
+      File.delete(setup_path)
+      setup_files.get_settings
+      File.write(setup_path, "hometown: [Crossing\n")
+      setup_files.get_settings
+      expect(parse_error_reports).to eq(2)
+    end
+
+    it 'reports a recurring error again after the file has loaded in between' do
+      fail_setup_reads(Errno::EMFILE.new(setup_path))
+      setup_files.get_settings # fails: reported
+      setup_files.get_settings # retried: loads Crossing, clearing the error
+      File.write(setup_path, { hometown: 'Shard' }.to_yaml)
+      setup_files.get_settings
+      File.write(setup_path, { hometown: 'Crossing' }.to_yaml) # same content as the first failure
+      fail_setup_reads(Errno::EMFILE.new(setup_path))
+      setup_files.get_settings # same content, same error: reported again
+      expect(parse_error_reports).to eq(2)
+      expect(setup_files.get_settings.hometown).to eq('Crossing')
+    end
+
+    it 'keeps #safe_load_yaml reporting on every call' do
+      File.write(setup_path, "hometown: [Crossing\n")
+      2.times { expect(setup_files.safe_load_yaml(setup_path)).to eq({}) }
+      expect(parse_error_reports).to eq(2)
     end
   end
 
