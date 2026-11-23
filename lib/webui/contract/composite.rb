@@ -74,7 +74,7 @@ module Lich
         surface_activate: event(record(
                                   x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
                                   button: property(enum(:primary, :secondary), required: true),
-                                  modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true),
+                                  modifiers: property(array(enum(:ctrl, :shift, :alt, :meta), max: 4), required: true),
                                   region: property(IDENT)
                                 ), terminal: true),
       }.freeze

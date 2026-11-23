@@ -405,7 +405,7 @@ RSpec.describe Lich::WebUI::Server do
     viewer_id, message = Timeout.timeout(2) { delivered.pop }
 
     expect(response_head).to start_with('HTTP/1.1 101 Switching Protocols')
-    expect(JSON.parse(hello.payload)).to include('type' => 'hello', 'contract_version' => '2.52.0')
+    expect(JSON.parse(hello.payload)).to include('type' => 'hello', 'contract_version' => '2.53.0')
     expect(viewer_id).to start_with('viewer-')
     expect(message).to eq(type: 'attach', page: 'page-abc', version: '2.5.0')
     socket.write(Lich::WebUI::WebSocket.encode_client_frame([1000].pack('n'), opcode: Lich::WebUI::WebSocket::OPCODE_CLOSE))
