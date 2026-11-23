@@ -80,11 +80,13 @@ module Lich
           # realize handlers once in its lifetime, then its map handlers once
           # per presentation; all realize handlers run before the first map
           # handler. A widget that stops being presented, with everything under
-          # it, becomes unmapped without a signal. Every visibility, attachment
-          # and window presentation change ends here. A handler of the
-          # transition may add or show further widgets under a widget that is
-          # not mapped yet; they are gathered again once the map handlers have
-          # run, until none is left, so they are mapped by the same transition.
+          # it, becomes unmapped without a signal. Showing or hiding a widget,
+          # presenting or hiding a window, and adding a child or a notebook
+          # page end here. Setting a notebook action widget or a submenu does
+          # not. A handler of the transition may add or show further widgets
+          # under a widget that is not mapped yet; they are gathered again once
+          # the map handlers have run, until none is left, so they are mapped
+          # by the same transition.
           # @yield between the first realize handlers and the map handlers,
           #   only when this widget itself becomes mapped
           # @return [void]

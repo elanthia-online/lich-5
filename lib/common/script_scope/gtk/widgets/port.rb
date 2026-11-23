@@ -9,10 +9,13 @@ module Lich
 
           # Records the container that holds this widget, or nil once detached.
           # Detaching unmaps this subtree, without a signal. Attaching runs no
-          # handler here: the container maps the subtree itself once it has
-          # recorded the child (see {#map_attached}), so a handler always
-          # finds the child in its container and a handler that raises leaves
-          # the attachment complete.
+          # handler here. A container that maps on attach does so itself once
+          # it has recorded the child (see {#map_attached}), so those handlers
+          # find the child in its container. When one raises, the child stays
+          # attached unless the container undoes a failed attachment, as Grid
+          # and Table attach do. Setting a notebook action widget or a submenu
+          # records the parent without mapping: the widget stays unmapped
+          # until a later show or presentation reaches it.
           # @param value [Widget, nil] new parent
           # @return [Widget, nil] the new parent
           # @api private
