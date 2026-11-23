@@ -30,6 +30,7 @@ module Lich
         @lists = lists
         @selection = {}
         @entries = {}
+        @tables = {}
         @list_revision = Hash.new(0)
         fields = options.fetch(:fields).reject { |field| lists.key?(field[:key]) }
         lists.each_key do |key|
@@ -52,9 +53,9 @@ module Lich
           rows = definition.fetch(:rows).call.each_with_index.map do |cells, index|
             { key: "row-#{index}", cells: cells }
           end
-          tree.table(key: key.to_s, columns: definition.fetch(:columns), rows: rows,
-                     selection: :single, selected: @selection[key] ? [@selection[key]] : [], **overrides,
-                     on: { selection_change: proc { |event| @selection[key] = event.payload[:rows].first } })
+          @tables[key] = tree.table(key: key.to_s, columns: definition.fetch(:columns), rows: rows,
+                                    selection: :single, selected: @selection[key] ? [@selection[key]] : [], **overrides,
+                                    on: { selection_change: proc { |event| @selection[key] = event.payload[:rows].first } })
         elsif (match = /\A(.+)_(entry|add|delete)\z/.match(key.to_s)) && @lists.key?(match[1].to_sym)
           overrides.delete(:label) if overrides[:label].nil?
           list, action = match[1].to_sym, match[2]
@@ -85,7 +86,22 @@ module Lich
           @selection.delete(key)
         end
         @values[key] = definition.fetch(:value).call
+        clear_viewer_selection(key, event)
         WebUI.refresh(@page)
+      end
+
+      # Row keys are positional and a rendered selection never replaces a viewer's own,
+      # so the acting viewer's highlight is cleared along with the form's selection.
+      # A refused write, such as for a disconnected viewer, which keeps its own
+      # selection if it resumes, is skipped and never stops the refresh.
+      # @return [void]
+      def clear_viewer_selection(key, event)
+        table = @tables[key]
+        return unless table
+
+        @page.set(table.cid, :selected, [], viewer: event.viewer_id)
+      rescue Error
+        nil
       end
 
       # Reads current caller-owned lists before delegating ordinary field persistence.
