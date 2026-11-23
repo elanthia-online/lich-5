@@ -32,6 +32,14 @@ module Lich
         ExpClearMindstate = %r{<component id='exp (?<skill>[a-zA-Z\s]+)'><\/component>}.freeze
         RoomPlayers = %r{\'room players\'>Also here: (?<players>.*)\.</component>}.freeze
         RoomPlayersEmpty = %r{\'room players\'></component>}.freeze
+        # The start of a player link (players have negative exist ids). Only
+        # counted, to confirm GameObj.pcs holds the list on this line; XMLParser
+        # does the parsing (see .linked_room_pcs).
+        PlayerLinkOpen = /<a\b[^>]*\bexist=["']-/.freeze
+        # Posture in a GameObj pc status. XMLParser's status can carry the next
+        # player's title ("sitting and Shadow Priest "), so match the word only.
+        PcProne = /\blying down\b|\bprone\b/.freeze
+        PcSitting = /\bsitting\b/.freeze
         RoomObjs = %r{\'room objs\'>(?<objs>.*)</component>}.freeze
         RoomObjsEmpty = %r{\'room objs\'></component>}.freeze
         # How the game ends a room objs component it cut short because the room
@@ -165,6 +173,36 @@ module Lich
         return line unless line.include?('</a>') || line.include?('<pushBold/><pushBold/>')
 
         line.gsub(LINK_TAG, '').gsub(PUSH_BOLD_RUN, '<pushBold/>').gsub(POP_BOLD_RUN, '<popBold/>')
+      end
+
+      # The linked players of a Saga-identity room players component, as
+      # XMLParser registered them in GameObj.pcs.
+      #
+      # Games#process_xml_data runs Ox.sax_parse(XMLData, ...) on the server
+      # string before DRParser.parse, and XMLParser commits the room players
+      # list when the component closes, so GameObj.pcs already holds this list,
+      # with each noun read from its link. Post strings are free text ("whose
+      # form wavers within a roiling cloud of grey smoke", "who is coated in soot
+      # and wrapped in ash"), so the text split cannot find a name or a boundary
+      # reliably; the links can.
+      #
+      # GameObj.pcs is used only when it is this list: the line carried links,
+      # every pc has a player id, and their count equals the player links on
+      # the server line. Otherwise this returns nil and the caller splits the
+      # text as before (the legacy stream, or a list XMLParser did not take whole).
+      #
+      # @param line [String] the line from {.match_line}
+      # @param server_line [String] the server string it came from
+      # @return [Array<GameObj>, nil] the players in list order, or nil
+      def self.linked_room_pcs(line, server_line)
+        return nil if line.equal?(server_line)
+
+        pcs = GameObj.pcs
+        return nil if pcs.nil? || pcs.empty?
+        return nil unless pcs.all? { |pc| pc.id.to_s.start_with?('-') }
+        return nil unless server_line.scan(Pattern::PlayerLinkOpen).size == pcs.size
+
+        pcs
       end
 
       # Checks server output against registered Flag matchers.
@@ -765,11 +803,19 @@ module Lich
             end
           elsif Pattern::RoomPlayersEmpty.match?(line)
             DRRoom.pcs = []
+            DRRoom.pcs_prone = []
+            DRRoom.pcs_sitting = []
           elsif (match = line.match(Pattern::RoomPlayers))
-            players = match[:players]&.dup || ''
-            DRRoom.pcs = find_pcs(players)
-            DRRoom.pcs_prone = find_pcs_prone(players)
-            DRRoom.pcs_sitting = find_pcs_sitting(players)
+            if (linked = linked_room_pcs(line, server_line))
+              DRRoom.pcs = linked.map(&:noun)
+              DRRoom.pcs_prone = linked.select { |pc| Pattern::PcProne.match?(pc.status.to_s) }.map(&:noun)
+              DRRoom.pcs_sitting = linked.select { |pc| Pattern::PcSitting.match?(pc.status.to_s) }.map(&:noun)
+            else
+              players = match[:players]&.dup || ''
+              DRRoom.pcs = find_pcs(players)
+              DRRoom.pcs_prone = find_pcs_prone(players)
+              DRRoom.pcs_sitting = find_pcs_sitting(players)
+            end
           elsif (match = line.match(Pattern::RoomObjs))
             # Also matches the empty component (RoomObjsEmpty never runs).
             apply_room_objs(match[:objs]&.dup || '')
