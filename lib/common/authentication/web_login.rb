@@ -316,7 +316,7 @@ module Lich
         # @param character [String] character name to match (case-insensitive)
         # @return [String] the matched charID (e.g. "W_ACCOUNT_000")
         # @raise [AuthenticationError] "NO_SUBSCRIPTION" if the account has no active subscription
-        #   on this instance, "CHARACTER_NOT_FOUND" if no radio input matches a 200 response, or
+        #   on this instance, "CHARACTER_NOT_FOUND" if no character label on a 200 response names it (with its id present in the page), or
         #   "UNEXPECTED_CHARACTER_LIST_RESPONSE" for any other non-200 response (a 3xx to anywhere
         #   but subscription_needed.asp, or a 4xx/5xx)
         # @api private
@@ -359,8 +359,9 @@ module Lich
           # Each character is a radio input plus a label naming it:
           #   <input type=radio name="charID" id="W_ACCT_000" ...>
           #   <label for="W_ACCT_000"><span class="normS1">Name</span></label>
-          # Match the label alone and confirm its radio separately: a
-          # backreference to the input's id would turn off Ruby's regexp
+          # Match the label alone, then check that its id also appears in the
+          # page (a string check, not a parse of the radio input). Matching
+          # the input's id with a backreference would turn off Ruby's regexp
           # memoization and make the scan quadratic on a hostile body.
           body.scan(/<label for="(W_[A-Za-z0-9_]+)"><span[^<>]*>([^<]+)<\/span>/).each do |char_code, name|
             return char_code if name.strip.casecmp?(character) && body.include?(%(id="#{char_code}"))

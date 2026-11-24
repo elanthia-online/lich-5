@@ -373,9 +373,10 @@ RSpec.describe Lich::Gemstone::GameInstance do
     it 'puts the lichid inside the first bracket and the uid after it' do
       Lich.display_lichid = true
       Lich.display_uid = true
+      XMLData.room_id = 123
 
       result = game_instance.modify_room_display(+"<style id=\"roomName\" />[Test Room] (123)")
-      expect(result).to eq("<style id=\"roomName\" />[Test Room - 123] (123)")
+      expect(result).to eq("<style id=\"roomName\" />[Test Room - 123] (u123)")
     end
 
     it 'leaves a string with no closing bracket alone' do
