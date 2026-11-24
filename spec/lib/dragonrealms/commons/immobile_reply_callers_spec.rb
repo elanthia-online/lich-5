@@ -548,7 +548,10 @@ RSpec.describe 'Callers that list the immobile reply' do
 
       it 'retreats when a slow first step and a hold together outlast the deadline' do
         game_with_clock('retreat' => lambda {
-          next(clock[:offset] += 10; 'You retreat back to pole range.') if sent.size == 1
+          if sent.size == 1
+            clock[:offset] += 10
+            next 'You retreat back to pole range.'
+          end
 
           clock[:offset] < 24 ? immobile : 'You retreat from combat.'
         })

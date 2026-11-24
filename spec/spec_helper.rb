@@ -802,9 +802,8 @@ class Script
     end
 
     # NOTE: Production uses Script.self (not Script.current) to get the running script
-    def self
-      @current || OpenStruct.new(name: 'test')
-    end
+    # Defined via define_method: `def self` is valid Ruby but CodeQL's Ruby parser rejects it.
+    define_method(:self) { @current || OpenStruct.new(name: 'test') }
 
     def exist?(_name)
       false
