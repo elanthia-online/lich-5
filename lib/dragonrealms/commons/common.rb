@@ -184,6 +184,24 @@ module Lich
       # simply fix the issue and retry the bput, like when we're prone
       # and need to be standing. Complex handling should be done within
       # the calling script.
+      #
+      # A caller whose command may stop being allowed while bput waits (a
+      # roundtime, a stand) can pass 'resend_if': bput calls it right before
+      # every resend, and before the wake, stop play, unhide or stand that
+      # would only make way for one. When it returns false or nil, bput sends
+      # nothing more and returns ''.
+      #
+      # @param message [String] the command to send
+      # @param matches [Array<Hash, String, Regexp>] an optional options Hash
+      #   first, then the patterns to wait for (a String is matched
+      #   case-insensitively). Options: 'timeout' (seconds to wait for a match
+      #   after the last send, default BPUT_DEFAULT_TIMEOUT), 'ignore_rt'
+      #   (send without waiting out roundtime, and don't resend after a
+      #   "...wait N seconds." reply), 'suppress_no_match' (say nothing on a
+      #   timeout), 'debug' (echo the arguments) and 'resend_if' (a callable
+      #   asked before each resend, see above).
+      # @return [String] the matched text, or '' on a timeout or a refused
+      #   resend
       def bput(message, *matches)
         options = (matches.shift if matches.first.is_a?(Hash)) || {}
         options['timeout'] ||= BPUT_DEFAULT_TIMEOUT
@@ -192,6 +210,8 @@ module Lich
         timeout = options['timeout']
         ignore_rt = options['ignore_rt']
         suppress = options['suppress_no_match']
+        resend_if = options['resend_if']
+        may_resend = -> { resend_if.nil? || resend_if.call }
 
         if options['debug']
           echo "bput.message=#{message}"
@@ -222,32 +242,44 @@ module Lich
           when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
             # Zadraes - 13:32 It's a "You're in an area actively being updated" message
             pause 1
+            return '' unless may_resend.call
+
             put message
             timer = Time.now
             next
           when WAIT_RESPONSE_PATTERN
             unless ignore_rt
               held = wait_out_roundtime(response)
+              return '' unless may_resend.call
+
               put message
               timer = Time.now
             end
             next
           when /Sorry, you may only type ahead/
             pause 1
+            return '' unless may_resend.call
+
             put message
             timer = Time.now
             next
           when /^You can't do that while you are asleep./
+            return '' unless may_resend.call
+
             put 'wake'
             put message
             timer = Time.now
             next
           when /^You are a bit too busy performing to do that/, /^You should stop playing before you do that/
+            return '' unless may_resend.call
+
             put 'stop play'
             put message
             timer = Time.now
             next
           when /would give away your hiding place/
+            return '' unless may_resend.call
+
             release_invisibility
             put 'unhide'
             put message
@@ -256,12 +288,16 @@ module Lich
           when /^You are still stunned/
             pause 0.5 while stunned?
             pause 0.5
+            return '' unless may_resend.call
+
             put message
             timer = Time.now
             next
           when /^You can't do that while entangled in a web/
             pause 0.5 while webbed?
             pause 0.5
+            return '' unless may_resend.call
+
             put message
             timer = Time.now
             next
@@ -269,10 +305,14 @@ module Lich
             # Stand, then resend. When standing can't succeed (unconscious,
             # overburdened, or a hold that outlasts the timeout), resending
             # would draw the same reply again at once, so keep reading until
-            # the timeout instead.
+            # the timeout instead. resend_if is asked before the stand as well
+            # as before the resend, so a refused resend doesn't stand for nothing.
+            return '' unless may_resend.call
             next unless stand_before?(timer + timeout)
 
             waitrt?
+            return '' unless may_resend.call
+
             put message
             timer = Time.now
             next

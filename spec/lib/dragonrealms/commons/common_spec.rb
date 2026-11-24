@@ -988,6 +988,146 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
     end
 
+    # 'resend_if' lets a caller stop a resend whose command is no longer
+    # allowed (sanowret-crystal and a go2 started during a roundtime). The
+    # same model of the game stream as above: each send queues its replies.
+    context "with 'resend_if'" do
+      let(:buffer) { [] }
+      let(:sent) { [] }
+      let(:checks) { [] }
+
+      def game(*replies_per_send)
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          buffer.concat(Array(replies_per_send[sent.size - 1]))
+        end
+        allow(described_class).to receive(:get?) { buffer.shift }
+        allow(described_class).to receive(:pause) { |_seconds| sleep(0.001) }
+      end
+
+      # Records each call; answers from answers in order, the last one repeated.
+      def resend_if(*answers)
+        lambda do
+          checks << :called
+          answers.size > 1 ? answers.shift : answers.first
+        end
+      end
+
+      def gaze(options = {})
+        described_class.bput('gaze my crystal', { 'timeout' => 0.2 }.merge(options), 'A soft light blossoms')
+      end
+
+      it 'resends after a wait when it allows the resend' do
+        game(['...wait 1 seconds.'], ['A soft light blossoms in the crystal.'])
+
+        expect(gaze('resend_if' => resend_if(true))).to eq('A soft light blossoms')
+        expect(sent).to eq(['gaze my crystal'] * 2)
+        expect(checks.size).to eq(1)
+      end
+
+      it 'sends nothing more after a wait and returns an empty string when it refuses' do
+        game(['...wait 1 seconds.'], ['A soft light blossoms in the crystal.'])
+
+        expect(gaze('resend_if' => resend_if(false))).to eq('')
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'does not report a refused resend as a timeout' do
+        game(['...wait 1 seconds.'])
+
+        gaze('resend_if' => resend_if(nil))
+
+        expect(Lich::Messaging.messages).to be_empty
+      end
+
+      it 'is asked after the roundtime has been waited out, not before' do
+        allowed = true
+        game(['...wait 1 seconds.'], ['A soft light blossoms in the crystal.'])
+        allow(described_class).to receive(:pause) do |_seconds|
+          allowed = false # a go2 starts during the wait
+          sleep(0.001)
+        end
+
+        expect(gaze('resend_if' => -> { allowed })).to eq('')
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'is asked before every resend' do
+        game(['...wait 1 seconds.'], ['...wait 1 seconds.'], ['A soft light blossoms in the crystal.'])
+
+        expect(gaze('resend_if' => resend_if(true, false))).to eq('')
+        expect(sent).to eq(['gaze my crystal'] * 2)
+        expect(checks.size).to eq(2)
+      end
+
+      it 'is not asked before the first send' do
+        game(['A soft light blossoms in the crystal.'])
+
+        expect(gaze('resend_if' => resend_if(false))).to eq('A soft light blossoms')
+        expect(checks).to be_empty
+      end
+
+      {
+        'a type-ahead refusal' => 'Sorry, you may only type ahead 1 command.',
+        'a frozen world'       => 'For some strange reason you are unable to do that.  The world somehow seems frozen in place.',
+        'still being stunned'  => 'You are still stunned.',
+        'a web'                => "You can't do that while entangled in a web."
+      }.each do |label, reply|
+        it "sends nothing more after #{label} when it refuses" do
+          game([reply], ['A soft light blossoms in the crystal.'])
+
+          expect(gaze('resend_if' => resend_if(false))).to eq('')
+          expect(sent).to eq(['gaze my crystal'])
+        end
+      end
+
+      it 'neither wakes the character nor resends when it refuses' do
+        game(["You can't do that while you are asleep."])
+
+        gaze('resend_if' => resend_if(false))
+
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'neither stops the play nor resends when it refuses' do
+        game(['You are a bit too busy performing to do that.'])
+
+        gaze('resend_if' => resend_if(false))
+
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'neither unhides nor resends when it refuses' do
+        allow(described_class).to receive(:release_invisibility)
+        game(['Doing that would give away your hiding place.'])
+
+        gaze('resend_if' => resend_if(false))
+
+        expect(described_class).not_to have_received(:release_invisibility)
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'does not stand when it refuses' do
+        allow(described_class).to receive(:stand_before?).and_return(true)
+        game(['You must be standing to do that.'])
+
+        gaze('resend_if' => resend_if(false))
+
+        expect(described_class).not_to have_received(:stand_before?)
+        expect(sent).to eq(['gaze my crystal'])
+      end
+
+      it 'stands, then is asked again before the resend' do
+        allow(described_class).to receive(:stand_before?).and_return(true)
+        game(['You must be standing to do that.'], ['A soft light blossoms in the crystal.'])
+
+        expect(gaze('resend_if' => resend_if(true, false))).to eq('')
+        expect(described_class).to have_received(:stand_before?).once
+        expect(sent).to eq(['gaze my crystal'])
+      end
+    end
+
     # The same model of the game stream, answering by command. get? raises
     # when no reply has arrived for a second, so a reply bput skips fails
     # the example at once instead of waiting out the 15 s timeout.
