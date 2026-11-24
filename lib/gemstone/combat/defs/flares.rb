@@ -412,10 +412,11 @@ module Lich
           # Flare announce lines name the flaring weapon as a link:
           #   Your <a exist="393573117" noun="sword">slim short sword</a> ...
           # The exist id is the join key for claiming pre-flares by weapon.
+          WEAPON_LINK = %r{Your <a exist="(?<id>\d+)" noun="[^"]+">(?<name>[^<]+)</a>}.freeze
+
           # Markup around a captured attacker name. Kept here, not borrowed from
           # Parser, so the definitions load and parse on their own.
           ANY_TAG = /<[^>]*>/.freeze
-          WEAPON_LINK = %r{Your <a exist="(?<id>\d+)" noun="[^"]+">(?<name>[^<]+)</a>}.freeze
 
           # Parse a flare announce line.
           #
