@@ -413,10 +413,9 @@ module Lich
         # text before the generated changelog, without HTML comments (release
         # templates leave authoring notes in them).
         #
-        # Plain index scans rather than regexps: the body comes from the
-        # GitHub API, and an unanchored /.+$/m or lazy comment pattern
-        # rescans from every repeated opener. A comment with no closing
-        # "-->" runs to the end of the body, as it would in a renderer.
+        # Both release paths share this one helper. A comment with no closing
+        # "-->" runs to the end of the body, as it would in a renderer, so a
+        # half-written authoring note is never shown.
         #
         # @param body [String, nil] release body from the GitHub API
         # @return [String]

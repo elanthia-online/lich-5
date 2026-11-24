@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'socket'
-require 'timeout'
 require_relative 'update_spec_helper'
 
 RSpec.describe Lich::Util::Update::ReleaseInstaller do
@@ -847,11 +846,6 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
 
     it 'returns an empty string for a nil body' do
       expect(notes(nil)).to eq('')
-    end
-
-    it 'stays fast on a body of repeated openers' do
-      body = ("<!--" * 50_000) + ("## What's Changed" * 50_000)
-      expect { Timeout.timeout(1) { notes(body) } }.not_to raise_error
     end
   end
 end

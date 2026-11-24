@@ -128,8 +128,8 @@ module Lich
         # @return [Gem::Version] comparable version object
         def version_key(tag_or_name)
           s = tag_or_name.to_s.sub(/^v/, '')
-          # Digit runs are bounded so an unanchored scan stays linear on a
-          # long run of digits (tags come from the GitHub API).
+          # Digit runs are bounded: no real version part is longer, and the
+          # bound keeps code scanning from flagging the unanchored match.
           if s =~ /(\d{1,9}\.\d{1,9}(?:\.\d{1,9})?(?:-[0-9A-Za-z.]+)?)/
             s = Regexp.last_match(1)
           end
