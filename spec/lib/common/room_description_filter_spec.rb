@@ -91,7 +91,7 @@ RSpec.describe Lich::Common::RoomDescriptionFilter do
     captured_off_reply = off_capture.find { |line| line.start_with?('You will no longer ') }
     first_row = listing.find { |line| line.start_with?('<popBold/>') }
     room_brief = listing.find { |line| line.include?('>RoomBrief</d>') }
-    strip_tags = ->(line) { line.gsub(/<[^>]*>/, '') }
+    strip_tags = ->(line) { line.gsub(SPEC_XML_TAG, '') }
 
     it 'has the rows these examples are built from' do
       expect(description_on).to start_with(%(  <d cmd="flag Description off">Description</d>        ON   Display room descriptions.))

@@ -44,6 +44,8 @@ require 'fileutils'
 SPEC_ROOT = File.expand_path(__dir__) unless defined?(SPEC_ROOT)
 LIB_DIR = File.join(SPEC_ROOT, '..', 'lib') unless defined?(LIB_DIR)
 FIXTURE_DIR = File.join(SPEC_ROOT, 'fixtures') unless defined?(FIXTURE_DIR)
+# Any XML tag, for helpers that reduce a game line to its text.
+SPEC_XML_TAG = /<[^>]+>/.freeze unless defined?(SPEC_XML_TAG)
 require_relative 'support/data_dir' # DATA_DIR: used by settings.rb for database storage
 
 # Add lib directory to load path for require statements
@@ -1635,7 +1637,7 @@ module DRC
     end
 
     def strip_xml(lines)
-      lines.map { |line| line.gsub(/<[^>]+>/, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
+      lines.map { |line| line.gsub(SPEC_XML_TAG, '').gsub('&gt;', '>').gsub('&lt;', '<').strip }
            .reject(&:empty?)
     end
 

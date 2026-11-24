@@ -328,7 +328,7 @@ module Lich
       end
 
       def note_stream_xml!(payload)
-        payload.to_s.scan(/<[^>]+>/) do |tag|
+        payload.to_s.scan(/<[^<>]+>/) do |tag|
           if tag.match?(/\A<pushStream\b/i)
             @stream_stack << (tag[/\bid=(["'])(.*?)\1/, 2] || true)
           elsif tag.match?(/\A<popStream\b/i)

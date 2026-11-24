@@ -356,8 +356,14 @@ module Lich
           raise AuthenticationError, "UNEXPECTED_CHARACTER_LIST_RESPONSE" unless code == 200
 
           body = response.body.to_s
-          body.scan(/id="(W_[A-Za-z0-9_]+)"[^>]*>\s*<label for="\1"><span[^>]*>([^<]+)<\/span>/).each do |char_code, name|
-            return char_code if name.strip.casecmp?(character)
+          # Each character is a radio input plus a label naming it:
+          #   <input type=radio name="charID" id="W_ACCT_000" ...>
+          #   <label for="W_ACCT_000"><span class="normS1">Name</span></label>
+          # Match the label alone and confirm its radio separately: a
+          # backreference to the input's id would turn off Ruby's regexp
+          # memoization and make the scan quadratic on a hostile body.
+          body.scan(/<label for="(W_[A-Za-z0-9_]+)"><span[^<>]*>([^<]+)<\/span>/).each do |char_code, name|
+            return char_code if name.strip.casecmp?(character) && body.include?(%(id="#{char_code}"))
           end
 
           raise AuthenticationError, "CHARACTER_NOT_FOUND"

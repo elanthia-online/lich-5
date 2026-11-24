@@ -1017,7 +1017,7 @@ end
 def checkarea(*strings)
   strings.flatten!
   if strings.empty?
-    XMLData.room_title.split(',').first.sub('[', '')
+    XMLData.room_title.split(',').first.delete_prefix('[')
   else
     XMLData.room_title.split(',').first =~ /#{strings.join('|')}/i
   end
@@ -1042,7 +1042,7 @@ end
 
 def checkfamarea(*strings)
   strings.flatten!
-  if strings.empty? then return XMLData.familiar_room_title.split(',').first.sub('[', '') end
+  if strings.empty? then return XMLData.familiar_room_title.split(',').first.delete_prefix('[') end
 
   XMLData.familiar_room_title.split(',').first =~ /#{strings.join('|')}/i
 end
@@ -1453,7 +1453,7 @@ def reget(*lines, core: false)
     history.gsub!(/<pushStream id=["'](?:spellfront|inv|bounty|society)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     history.gsub!(/<stream id="Spells">.*?<\/stream>/m, '')
     history.gsub!(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-    history.gsub!(/<[^>]+>/, '')
+    history.gsub!(Lich::Common::Markup::ANY_TAG, '')
     history.gsub!('&gt;', '>')
     history.gsub!('&lt;', '<')
   end

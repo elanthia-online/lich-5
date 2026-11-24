@@ -25,6 +25,10 @@ module Lich
         # extract_attacker_from_match)
         OPEN_LINK_TAIL_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)\z/i.freeze
 
+        # Any XML tag (link, bold, preset). Stripping it leaves the text a
+        # pattern is matched against; nothing here is rendered as HTML.
+        TAG_PATTERN = /<[^>]+>/.freeze
+
         # Bold tag pattern - creatures are wrapped in bold tags
         # Non-greedy match to avoid spanning multiple creatures
         # Allow zero or more characters before <a> tag (e.g., "a creature" or just "creature")
@@ -212,7 +216,7 @@ module Lich
 
           # Drop XML link/bold markup from a captured fragment
           def strip_links(text)
-            text.gsub(/<[^>]+>/, '')
+            text.gsub(TAG_PATTERN, '')
           end
 
           # A creature's display name from its link. The game sometimes puts

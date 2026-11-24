@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'socket'
+require 'timeout'
 require_relative 'update_spec_helper'
 
 RSpec.describe Lich::Util::Update::ReleaseInstaller do
@@ -822,6 +823,35 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
 
         expect(target).to eq(['5.20.0-beta.1', 'https://example.test/beta.tar.gz', "Beta notes\n"])
       end
+    end
+  end
+
+  describe '#release_notes' do
+    def notes(body) = installer.send(:release_notes, body)
+
+    it 'keeps the text before the generated changelog' do
+      expect(notes("Highlights\n\n## What's Changed\n* fix(gs): x by @a")).to eq("Highlights\n\n")
+    end
+
+    it 'drops a changelog heading with nothing after it' do
+      expect(notes("Highlights\n## What's Changed")).to eq("Highlights\n")
+    end
+
+    it 'removes every HTML comment, across lines' do
+      expect(notes("a<!-- one -->b<!--\ntwo\n-->c<!---->d")).to eq('abcd')
+    end
+
+    it 'drops an unterminated comment to the end of the body' do
+      expect(notes('keep <!-- never closed')).to eq('keep ')
+    end
+
+    it 'returns an empty string for a nil body' do
+      expect(notes(nil)).to eq('')
+    end
+
+    it 'stays fast on a body of repeated openers' do
+      body = ("<!--" * 50_000) + ("## What's Changed" * 50_000)
+      expect { Timeout.timeout(1) { notes(body) } }.not_to raise_error
     end
   end
 end
