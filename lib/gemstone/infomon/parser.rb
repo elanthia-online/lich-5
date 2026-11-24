@@ -7,11 +7,11 @@ module Lich
       module Parser
         module Pattern
           # Regex patterns grouped for Info, Exp, Skill and PSM parsing - calls upsert_batch to reduce db impact
-          CharRaceProf = /^Name:\s+(?<name>[A-z\s'-]+)\s+Race:\s+(?<race>[A-z]+|[A-z]+(?: |-)[A-z]+)\s+Profession:\s+(?<profession>[-A-z]+)/.freeze
-          CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
+          CharRaceProf = /^Name:\s+(?<name>[A-Za-z\s'-]+)\s+Race:\s+(?<race>[A-Za-z]+|[A-Za-z]+(?: |-)[A-Za-z]+)\s+Profession:\s+(?<profession>[-A-Za-z]+)/.freeze
+          CharGenderAgeExpLevel = /^Gender:\s+(?<gender>[A-Za-z]+)\s+Age:\s+(?<age>[,0-9]+)\s+Expr:\s+(?<experience>[0-9,]+)\s+Level:\s+(?<level>[0-9]+)/.freeze
           # Matches both 'info' (2 columns) and 'info full' (3 columns with base stats)
           # Base stats are optional - only present in 'info full' output
-          Stat = /^\s*(?<stat>[A-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):(?:\s+(?<base_value>\d+)\s+\((?<base_bonus>-?\d+)\)\s+[.]{3})?\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
+          Stat = /^\s*(?<stat>[A-Za-z]+)\s\((?:STR|CON|DEX|AGI|DIS|AUR|LOG|INT|WIS|INF)\):(?:\s+(?<base_value>\d+)\s+\((?<base_bonus>-?\d+)\)\s+[.]{3})?\s+(?<value>[0-9]+)\s\((?<bonus>-?[0-9]+)\)\s+[.]{3}\s+(?<enhanced_value>\d+)\s+\((?<enhanced_bonus>-?\d+)\)/.freeze
           StatEnd = /^Mana:\s+-?\d+\s+Silver:\s(?<silver>-?[\d,]+)$/.freeze
           Fame = /^\s+Level: \d+\s+Fame: (?<fame>-?[\d,]+)$/.freeze # serves as ExprStart
           RealExp = %r{^\s+Experience: [\d,]+\s+Field Exp: (?<fxp_current>[\d,]+)/(?<fxp_max>[\d,]+)$}.freeze
@@ -27,7 +27,7 @@ module Lich
           GoalsEnded = /^Further information can be found in the FAQs\.$/.freeze
           InnCheckedOut = /^Leaving your room, you check back out of .*, wander over to the front desk and hand the room key back to the innkeeper\./.freeze
           PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
-          PSM = /^\s+(?<name>[A-z\s\-':]+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
+          PSM = /^\s+(?<name>[A-Za-z\s\-':]+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
           PSMEnd = /^   Subcategory: all$/.freeze
 
           # Single / low impact - single db write
@@ -42,12 +42,12 @@ module Lich
           SocietyResign = /^The Grandmaster says, "I'm sorry to hear that.  You are no longer in our service.|^The Poohbah looks at you sternly.  "I had high hopes for you," he says, "but if this be your decision, so be it\.  I hereby strip you of membership|^The Grandmaster says, "I'm sorry to hear that,.+I wish you well with any of your future endeavors./.freeze
           Warcries = /^\s+(?<name>(?:Bertrandt's Bellow|Yertie's Yowlp|Gerrelle's Growl|Seanette's Shout|Carn's Cry|Horland's Holler))$/.freeze
           NoWarcries = /^You must be an active member of the Warrior Guild to use this skill\.$/.freeze
-          LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-z\s\-':]+), costing \d+ (?<cat>[A-z]+) .*?points\.$/
+          LearnPSM = /^You have now achieved rank (?<rank>\d+) of (?<psm>[A-Za-z\s\-':]+), costing \d+ (?<cat>[A-Za-z]+) .*?points\.$/
           # Technique covers Specialization (Armor and Shield), Technique (Weapon), and Feat
-          LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s\-':]+)\.\]$/.freeze
-          UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-z\s\-':]+), regaining \d+ (?<cat>[A-z]+) .*?points\.$/
-          UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d+) of (?<cat>[A-z]+).*: (?<psm>[A-z\s\-':]+)\.\]$/.freeze
-          LostTechnique = /^\[You are no longer trained in (?<cat>[A-z]+) .*: (?<psm>[A-z\s\-':]+)\.\]$/.freeze
+          LearnTechnique = /^\[You have (?:gained|increased to) rank (?<rank>\d+) of (?<cat>[A-Za-z]+).*: (?<psm>[A-Za-z\s\-':]+)\.\]$/.freeze
+          UnlearnPSM = /^You decide to unlearn rank (?<rank>\d+) of (?<psm>[A-Za-z\s\-':]+), regaining \d+ (?<cat>[A-Za-z]+) .*?points\.$/
+          UnlearnTechnique = /^\[You have decreased to rank (?<rank>\d+) of (?<cat>[A-Za-z]+).*: (?<psm>[A-Za-z\s\-':]+)\.\]$/.freeze
+          LostTechnique = /^\[You are no longer trained in (?<cat>[A-Za-z]+) .*: (?<psm>[A-Za-z\s\-':]+)\.\]$/.freeze
           Resource = /^(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality): (?<weekly>[0-9,]+)\/50,000 \(Weekly\)\s+(?<total>[0-9,]+)\/200,000 \(Total\)$/.freeze
           Suffused = /^Suffused (?<type>(?:Essence|Necrotic Energy|Lore Knowledge|Motes of Tranquility|Devotion|Nature's Grace|Grit|Luck Inspiration|Guile|Vitality)): (?<suffused>[0-9,]+)$/.freeze
           VolnFavor = /^Voln Favor: (?<favor>[-\d,]+)$/.freeze

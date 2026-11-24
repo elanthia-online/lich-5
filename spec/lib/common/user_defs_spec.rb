@@ -121,7 +121,7 @@ RSpec.describe Lich::Common::UserDefs do
     end
 
     it 'skips a timed-out pattern, reports once, and leaves the text intact' do
-      pattern = /(a+)+$/
+      pattern = /a+$/ # the timeout is stubbed, so any pattern will do
       text = +'aaaa'
       allow(text).to receive(:sub).with(pattern, '').and_raise(Regexp::TimeoutError)
 

@@ -128,7 +128,9 @@ module Lich
         # @return [Gem::Version] comparable version object
         def version_key(tag_or_name)
           s = tag_or_name.to_s.sub(/^v/, '')
-          if s =~ /(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z\.]+)?)/
+          # Digit runs are bounded: no real version part is longer, and the
+          # bound keeps code scanning from flagging the unanchored match.
+          if s =~ /(\d{1,9}\.\d{1,9}(?:\.\d{1,9})?(?:-[0-9A-Za-z.]+)?)/
             s = Regexp.last_match(1)
           end
           s = s.gsub('-beta.', '.beta.').gsub(/-beta(?!\.)/, '.beta')
@@ -143,9 +145,9 @@ module Lich
           return [nil, nil, nil] if str.nil?
 
           s = str.to_s.sub(/^v/, '')
-          if s =~ /(\d+)\.(\d+)\.(\d+)/
+          if s =~ /(\d{1,9})\.(\d{1,9})\.(\d{1,9})/
             [$1.to_i, $2.to_i, $3.to_i]
-          elsif s =~ /(\d+)\.(\d+)/
+          elsif s =~ /(\d{1,9})\.(\d{1,9})/
             [$1.to_i, $2.to_i, 0]
           else
             [nil, nil, nil]

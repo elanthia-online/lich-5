@@ -824,4 +824,28 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
       end
     end
   end
+
+  describe '#release_notes' do
+    def notes(body) = installer.send(:release_notes, body)
+
+    it 'keeps the text before the generated changelog' do
+      expect(notes("Highlights\n\n## What's Changed\n* fix(gs): x by @a")).to eq("Highlights\n\n")
+    end
+
+    it 'drops a changelog heading with nothing after it' do
+      expect(notes("Highlights\n## What's Changed")).to eq("Highlights\n")
+    end
+
+    it 'removes every HTML comment, across lines' do
+      expect(notes("a<!-- one -->b<!--\ntwo\n-->c<!---->d")).to eq('abcd')
+    end
+
+    it 'drops an unterminated comment to the end of the body' do
+      expect(notes('keep <!-- never closed')).to eq('keep ')
+    end
+
+    it 'returns an empty string for a nil body' do
+      expect(notes(nil)).to eq('')
+    end
+  end
 end

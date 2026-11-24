@@ -1201,7 +1201,7 @@ module Lich
             # above on the same line and double-applied their effects.
             attack = (amb || rdr) ? nil : line_attack
 
-            if (nock = line.gsub(/<[^>]+>/, '').match(/\AYou nock .+? in your (?<weapon>[^.]+)\.\s*\z/))
+            if (nock = Parser.strip_links(line).match(/\AYou nock .+? in your (?<weapon>[^.]+)\.\s*\z/))
               nocked = nock[:weapon]
             end
             if attack
@@ -1704,7 +1704,7 @@ module Lich
                     end
 
                     # Look for crit on this line
-                    if (c = CritRanks.parse(next_line.gsub(/<.+?>/, '')).values.first)
+                    if (c = CritRanks.parse(Parser.strip_links(next_line)).values.first)
                       # Keep the whole CritRanks hash rather than copying five
                       # keys out of it: it is already allocated, and the rest
                       # (stunned, roundtime, amputated, position, silenced,

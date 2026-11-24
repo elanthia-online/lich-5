@@ -143,7 +143,7 @@ module Lich
             end
             @release_tag = latest['tag_name'].to_s
             @update_to = @release_tag.sub(/^v/, '')
-            @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+            @new_features = release_notes(latest['body'])
             @zipfile = release_asset.fetch('browser_download_url')
           end
         end
@@ -404,7 +404,39 @@ module Lich
           SnapshotManager.declared_version(version_file_path)
         end
 
+        # Where GitHub's generated changelog starts in a release body.
+        CHANGELOG_HEADING = "## What's Changed"
+
         private
+
+        # The part of a release body worth showing in the announcement: the
+        # text before the generated changelog, without HTML comments (release
+        # templates leave authoring notes in them).
+        #
+        # Both release paths share this one helper. A comment with no closing
+        # "-->" runs to the end of the body, as it would in a renderer, so a
+        # half-written authoring note is never shown.
+        #
+        # @param body [String, nil] release body from the GitHub API
+        # @return [String]
+        # @api private
+        def release_notes(body)
+          body = body.to_s
+          if (heading = body.index(CHANGELOG_HEADING))
+            body = body[0, heading]
+          end
+
+          notes = +''
+          pos = 0
+          while (open = body.index('<!--', pos))
+            notes << body[pos...open]
+            close = body.index('-->', open + 4)
+            return notes if close.nil?
+
+            pos = close + 3
+          end
+          notes << body[pos..]
+        end
 
         # Tells the user when this computer cannot open the beta's windows:
         # the beta needs a native window helper or a Chromium-based browser
@@ -473,7 +505,7 @@ module Lich
               elsif entry.include? 'assets'
                 @holder = value
               elsif entry.include? 'body'
-                @new_features = value.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
+                @new_features = release_notes(value)
               end
             end
             release_asset = @holder && @holder.find { |x| x['name'] =~ /\b#{ASSET_TARBALL_NAME}\b/ }

@@ -55,7 +55,7 @@ module PsmSpecHelpers
 
   # A game line as a script sees it: XML tags stripped.
   def plain(line)
-    line.gsub(/<[^>]+>/, '')
+    line.gsub(SPEC_XML_TAG, '')
   end
 
   # The first line of a replay fixture (lifted from a real session log) that

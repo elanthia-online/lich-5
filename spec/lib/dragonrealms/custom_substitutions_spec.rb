@@ -171,7 +171,7 @@ RSpec.describe Lich::DragonRealms::CustomSubstitutions do
     # Regexp::TimeoutError is caught, the text is left intact, and it is reported
     # only once per pattern.
     it 'skips a pattern that times out and reports it once, leaving text intact' do
-      pattern = /(a+)+$/
+      pattern = /a+$/ # the timeout is stubbed, so any pattern will do
       text = +'aaaa' # mutable so the sub stub can define a singleton method
       allow(text).to receive(:sub).with(pattern, '').and_raise(Regexp::TimeoutError)
 

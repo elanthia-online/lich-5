@@ -1562,13 +1562,14 @@ module Lich
         else
           lichid_from_uid_string = Room["u#{uid_from_string[:uid]}"].id.to_i
         end
-        if Lich.display_lichid == true
-          alt_string.sub!(']') { " - #{lichid_from_uid_string}]" }
+        if Lich.display_lichid == true && (close = alt_string.index(']'))
+          alt_string.insert(close, " - #{lichid_from_uid_string}")
         end
 
         if Lich.display_uid == true
           alt_string.sub!(/] \(\d+\)/) { "]" }
-          alt_string.sub!(']') { "] (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})" }
+          close = alt_string.index(']')
+          alt_string.insert(close + 1, " (#{(uid_from_string.nil? || XMLData.room_id == uid_from_string[:uid].to_i) ? ((XMLData.room_id == 0 || XMLData.room_id > 4294967296) ? "unknown" : "u#{XMLData.room_id}") : uid_from_string[:uid].to_i})") if close
         end
 
         alt_string
@@ -1672,7 +1673,8 @@ module Lich
         if room_id_in_title?
           alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" } if suppress_game_realid?
           room_number = room_number_display
-          alt_string.sub!(']') { " - #{room_number}]" } unless room_number.empty?
+          close = alt_string.index(']')
+          alt_string.insert(close, " - #{room_number}") unless close.nil? || room_number.empty?
         elsif suppress_game_realid?
           alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
         end

@@ -414,6 +414,10 @@ module Lich
           # The exist id is the join key for claiming pre-flares by weapon.
           WEAPON_LINK = %r{Your <a exist="(?<id>\d+)" noun="[^"]+">(?<name>[^<]+)</a>}.freeze
 
+          # Markup around a captured attacker name. Kept here, not borrowed from
+          # Parser, so the definitions load and parse on their own.
+          ANY_TAG = /<[^>]*>/.freeze
+
           # Parse a flare announce line.
           #
           # @return [Hash, nil] { name:, damaging:, aoe:, spawns:, target:, weapon: }
@@ -433,7 +437,7 @@ module Lich
               if match.names.include?('attacker') && (who = match[:attacker])
                 # a lazy capture can land on the FIRST-PERSON form ("from your
                 # hands" - boil_blood): that is ours, not an attacker
-                result[:attacker] = who unless who.gsub(/<[^>]*>/, '').strip =~ /\A(?:your?|yourself)\z/i
+                result[:attacker] = who unless who.gsub(ANY_TAG, '').strip =~ /\A(?:your?|yourself)\z/i
               end
               if (weapon = WEAPON_LINK.match(line))
                 result[:weapon] = { id: weapon[:id].to_i, name: weapon[:name] }

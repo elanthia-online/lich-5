@@ -61,6 +61,7 @@ module StreamReplay
     LOG_DATE_HEADER = /\A\d{4}-\d\d-\d\d \d{1,2}:\d\d[ap]m\s*\z/
     LOG_TRAILER = /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d:\d\d\s*\z/
     CLIENT_ECHO = /<!-- CLIENT -->/
+    XML_TAG = /<[^>]+>/.freeze
     MARKER = '### stream-replay:body-below ###'
     END_PROMPT = '<prompt time="0">&gt;</prompt>'
     SETTINGS_BODY = %r{(<settings\b[^>]*>).*?</settings>}
@@ -188,7 +189,7 @@ module StreamReplay
         if (m = l.match(/Also here: (.*?)(?:<\/component>|\.?\s*\z)/))
           # The list ends with a period ("... and X.</component>"); drop it so
           # the last entry is a bare name like the others.
-          plain = m[1].gsub(/<[^>]+>/, '').sub(/\.\s*\z/, '')
+          plain = m[1].gsub(XML_TAG, '').sub(/\.\s*\z/, '')
           plain.split(/, | and /).each do |entry|
             entry = entry.sub(/ who .*\z/, '').sub(/ \(.*\)\z/, '').strip
             last = entry.split.last
