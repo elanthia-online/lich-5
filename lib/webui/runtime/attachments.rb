@@ -6,7 +6,7 @@ module Lich
       # Retains resumable attachments and rechecks modals after active viewers leave.
       # Enqueues every detach before notifying each owner identity once, then
       # schedules one recheck at the resume deadline so expiry is delivered even
-      # when no later request arrives (B2).
+      # when no later request arrives.
       # A refused detach enqueue (queue overflow or a terminated owner) does not
       # skip the other attachments, the expiry recheck or the owner notifications;
       # every step is attempted and the first refusal is re-raised afterwards.
@@ -35,7 +35,7 @@ module Lich
 
       # A different script's open window cannot present this owner's modal.
       # Active and resumable (transiently disconnected, unexpired) viewers both
-      # count; modal no-viewer policy applies only when neither remains (B2).
+      # count; modal no-viewer policy applies only when neither remains.
       # The store decides expiry; this only remembers which viewers to recheck.
       # @param owner [Object] server-owned lifecycle identity
       # @return [Boolean]
@@ -99,7 +99,7 @@ module Lich
       # Close targets attachment lifetime, so an in-flight render must not discard
       # it. Component events still require the delivered generation to match.
       # Viewer detach never closes the page: managed-window closure belongs to the
-      # owned process path (browser_closed), so another viewer keeps its page (B2).
+      # owned process path (browser_closed), so another viewer keeps its page.
       # The attachment is retired even when a lifecycle enqueue is refused (queue
       # overflow or a terminated owner); every job is attempted, the first refusal
       # is re-raised, and no window-close claim is consumed here.

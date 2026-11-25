@@ -185,7 +185,7 @@ RSpec.describe 'adapter handle ownership' do
     expect(service.registry.pages_for(owner).first.last_render.facilities).not_to have_key(:focus)
   end
 
-  it 'prunes collected keys from the weak identity map behind adapter handles (1832:RC30)' do
+  it 'prunes collected keys from the weak identity map behind adapter handles' do
     map = Lich::WebUI::WeakIdentityMap.new
     live_key, live_value = Object.new, Object.new
     map[live_key] = live_value

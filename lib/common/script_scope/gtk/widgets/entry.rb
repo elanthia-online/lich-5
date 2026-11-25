@@ -11,10 +11,10 @@ module Lich
           # @return [Entry] self
           def modify_base(state, colour)
             session.style_operation(self, :modify_base) do
-              # Later-layer constants (Gdk::Color; defined at P13 or P14) are absent from
-              # P12 and P13 trees; resolve them at call time. An absent class has no instances.
-              # Retirement: replace these guards with plain constant references once this
-              # file is no longer shipped or tested without the later layers.
+              # Gdk::Color is defined in another shim file and may be absent.
+              # Resolve it at call time; an absent class has no instances.
+              # Retirement: replace this guard with a plain constant reference once this
+              # file is always shipped and tested with the defining file.
               session.refuse(self, :modify_base) if destroyed? || !(defined?(Gdk::Color) && colour.is_a?(Gdk::Color))
               override_background_color(state, colour.to_rgba)
             end

@@ -133,7 +133,7 @@ module Lich
 
           # Retains bounded literal tooltip text and refreshes the column definition.
           # Binary-tagged UTF-8 is re-tagged as ListStore does; other non-UTF-8
-          # text is refused here, not later at publication (1844:RC12).
+          # text is refused here, not later at publication.
           # @param value [String] bounded literal header tooltip
           # @return [void] result is not part of the supported script contract
           def set_tooltip_text(value)
@@ -235,7 +235,7 @@ module Lich
           def changed! = view&.columns_changed!
 
           # Normalizes a header caption: binary-tagged UTF-8 is re-tagged and other
-          # non-UTF-8 text is refused at the call, not at publication (1844:RC13).
+          # non-UTF-8 text is refused at the call, not at publication.
           # @param value [#to_s] header caption
           # @param operation [Symbol] public operation named in the refusal
           # @return [String] caption as UTF-8

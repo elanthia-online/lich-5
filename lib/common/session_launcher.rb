@@ -204,13 +204,12 @@ module Lich
         # Returns this process's own value for an :inherit flag the launch context
         # did not mention.
         #
-        # Production launch contexts (see GuiLogin#handle_play_action) carry
-        # account and frontend keys only -- never directory overrides. For flags
-        # backed by a constants.rb default that is harmless, since the child
-        # re-derives the same path. An :inherit flag has no such default: a child
-        # spawned without it coordinates through its own TEMP_DIR instead, so
-        # every GUI-launched session would build an isolated Active Sessions
-        # registry and defeat the point of --active-session-dir.
+        # Launch contexts may carry account and frontend keys without directory
+        # overrides. For flags backed by a constants.rb default that is harmless,
+        # since the child re-derives the same path. An :inherit flag has no such
+        # default: a child spawned without it coordinates through its own
+        # TEMP_DIR instead, so every launcher session would build an isolated
+        # Active Sessions registry and defeat the point of --active-session-dir.
         #
         # @param path_flag [Hash]
         # @return [String, nil]

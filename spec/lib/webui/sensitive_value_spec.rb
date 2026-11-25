@@ -60,7 +60,7 @@ RSpec.describe Lich::WebUI::SensitiveValue do
     expect(carrier.discard!).to be false
     expect { carrier.consume { nil } }.to raise_error(Lich::WebUI::ConsumedSensitiveValueError)
   end
-  it 'G3 RC32 refuses dup and clone without changing the original lifecycle' do
+  it 'refuses dup and clone without changing the original lifecycle' do
     %i[viewer server].each do |origin|
       carrier = described_class.new(secret, origin: origin)
       expect { carrier.dup }.to raise_error(TypeError, /cannot be copied/)
@@ -72,7 +72,7 @@ RSpec.describe Lich::WebUI::SensitiveValue do
     end
   end
 
-  it 'G3 RC33 refuses freezing while keeping consume and discard available' do
+  it 'refuses freezing while keeping consume and discard available' do
     carrier = described_class.viewer(secret)
     expect { carrier.freeze }.to raise_error(TypeError, /cannot be frozen/)
     expect(carrier).not_to be_frozen

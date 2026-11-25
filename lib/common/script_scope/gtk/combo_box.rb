@@ -349,7 +349,7 @@ module Lich
           # Encodes literal text separately from option IDs and the clearing sentinel.
           # Binary-tagged UTF-8 is re-tagged as ListStore does, so it publishes and
           # matches a closed combo's UTF-8 labels; other non-UTF-8 text is refused
-          # here, not later at publication (1844:RC11).
+          # here, not later at publication.
           # @param text [String] literal text for the entry facade
           # @return [ComboBox] self
           # @api private
@@ -452,7 +452,7 @@ module Lich
 
           # Normalizes a new row's label before the row exists. The model adds a
           # row and then sets its cell in two steps, so a label refused after the
-          # first step would leave a blank selectable row behind (1844:RC9).
+          # first step would leave a blank selectable row behind.
           # Binary-tagged UTF-8 is re-tagged as ListStore does; other non-UTF-8
           # text, or a label longer than the select projection allows, is refused.
           # @param text [Object] script-supplied label, converted with String

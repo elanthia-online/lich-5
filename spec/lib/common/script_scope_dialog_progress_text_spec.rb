@@ -7,9 +7,9 @@ require_relative '../../../lib/common/script_scope/gtk/widgets'
 require_relative '../../../lib/common/script_scope/gtk/dialogs'
 require_relative '../../../lib/common/script_scope/gtk/displays'
 
-# The P14 share of the text boundary (1845:RC13): MessageDialog#initialize and
+# MessageDialog#initialize and
 # ProgressBar#set_text turn binary-tagged UTF-8 into UTF-8 and refuse other
-# non-UTF-8 text at the call, as the P12 and P13 text setters do (1843:RC19),
+# non-UTF-8 text at the call, as the widget, model and table text setters do,
 # instead of at the next publication.
 RSpec.describe 'script compatibility dialog and progress text' do
   port_class = Class.new do

@@ -5,8 +5,7 @@ require 'webui'
 require 'json'
 
 # Viewer detach versus managed-window close, resume and expiry, and attach
-# rollback (B2): 1836:RC5, 1836:RC7, 1836:RC8, 1836:RC9, 1836:RC17 and
-# 1832:RC32.
+# rollback.
 RSpec.describe 'WebUI viewer lifecycle boundaries' do
   connection_class = Class.new do
     attr_reader :viewer_id
@@ -83,7 +82,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
     Array.new(events.size) { events.pop }
   end
 
-  describe 'viewer detach versus managed-window close (1836:RC8)' do
+  describe 'viewer detach versus managed-window close' do
     it 'detaches one of two live viewers without closing the page for the other viewer' do
       page = settings_page
       first, second = connection('first'), connection('second')
@@ -121,7 +120,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
     end
   end
 
-  describe 'detach with a refused lifecycle enqueue (1836:RC5)' do
+  describe 'detach with a refused lifecycle enqueue' do
     it 'still retires the attachment and leaves the window-close claim for the owned process path' do
       page = settings_page
       runtime.watch_window(page)
@@ -144,7 +143,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
     end
   end
 
-  describe 'disconnect with a refused detach enqueue (1836:RC17)' do
+  describe 'disconnect with a refused detach enqueue' do
     it 'attempts every detach, schedules expiry and notifies owners before re-raising the first refusal' do
       recorder = events
       pages = %w[first second].map do |id|
@@ -172,7 +171,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
     end
   end
 
-  describe 'modal no-viewer policy across resume and expiry (1836:RC7)' do
+  describe 'modal no-viewer policy across resume and expiry' do
     def modal_coordinator
       coordinator[0] = Lich::WebUI::ModalCoordinator.new(
         registry: registry, runtime: runtime, viewers_present: ->(who) { runtime.viewers_present?(who) },
@@ -238,7 +237,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
     end
   end
 
-  describe 'failed attach rollback (1836:RC9)' do
+  describe 'failed attach rollback' do
     it 'leaves no viewer or connection record when delivery fails and accepts a retry on the same connection' do
       page = settings_page
       viewer = connection('viewer', fail_sends: 1)
@@ -270,7 +269,7 @@ RSpec.describe 'WebUI viewer lifecycle boundaries' do
       expect(viewers.attachments_for(page).map(&:resume_state)).to eq([:resumed])
     end
 
-    it 're-suspends a resumed viewer whose render cannot be delivered, so a later resume keeps it (1832:RC32)' do
+    it 're-suspends a resumed viewer whose render cannot be delivered, so a later resume keeps it' do
       page = settings_page
       viewer = connection('viewer')
       attach(viewer, page)

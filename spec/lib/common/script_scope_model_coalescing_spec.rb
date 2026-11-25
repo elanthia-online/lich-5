@@ -8,7 +8,7 @@ require_relative '../../../lib/common/script_scope/gtk/models'
 require_relative '../../../lib/common/script_scope/gtk/tree_view'
 require_relative '../../../lib/common/script_scope/gtk/combo_box'
 
-# Script-thread model writes outside a callback (1844:RC4). Owner dispatcher work
+# Script-thread model writes outside a callback. Owner dispatcher work
 # is held in a list until the spec runs it, as the core holds it for the owner
 # worker. A recording port stands in for core.
 RSpec.describe 'script compatibility model publication outside callbacks' do
