@@ -6,6 +6,60 @@ require 'gemstone/overwatch'
 RSpec.describe Lich::Gemstone::Overwatch do
   let(:term) { described_class::Observer::Term }
 
+  describe 'creature reveals with no 1st-person target (Term::REVEALED_*)' do
+    # Raw XML captured live; player names and ids anonymized.
+    {
+      'another player discovers a hider' => [
+        :REVEALED_PLAYER_DISCOVERS, '171513983', 'boarrat', 'beady-eyed scrub boarrat',
+        '<a exist="-1234567" noun="Examplechar">Examplechar</a> discovers the hiding place of ' \
+          '<pushBold/>a <a exist="171513983" noun="boarrat">beady-eyed scrub boarrat</a><popBold/>!'
+      ],
+      'forced out of hiding'             => [
+        :REVEALED_FORCED_OUT, '10488885', 'assassin', 'triton assassin',
+        '<pushBold/>A <a exist="10488885" noun="assassin">triton assassin</a><popBold/> is forced out of hiding.'
+      ],
+      'falls out of hiding'              => [
+        :REVEALED_FALLS_OUT, '148417050', 'warden', 'radiant triton warden',
+        '<pushBold/>A <a exist="148417050" noun="warden">radiant triton warden</a><popBold/> falls out of hiding!'
+      ],
+      'knocked from hiding'              => [
+        :REVEALED_KNOCKED, '24952721', 'stalker', 'sleek black kiramon stalker',
+        '<pushBold/>A <a exist="24952721" noun="stalker">sleek black kiramon stalker</a><popBold/> is knocked from hiding.'
+      ],
+      'bandit jumps out of the shadows'  => [
+        :REVEALED_JUMPS_OUT, '210393802', 'robber', 'gnomish robber',
+        '<pushBold/>A <a exist="210393802" noun="robber">gnomish robber</a><popBold/> suddenly jumps out of the shadows!'
+      ],
+    }.each do |what, (const, id, noun, name, raw)|
+      context what do
+        let(:line) { raw }
+
+        it 'captures the revealed creature id, noun and name' do
+          match = line.match(term.const_get(const))
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq(noun)
+          expect(match[:name]).to eq(name)
+        end
+
+        it 'is part of ANY_REVEALED and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_REVEALED)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature into the target list via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets).with(id, noun, name)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+
+    it 'ignores a player being forced out of hiding' do
+      line = '<a exist="-1234567" noun="Examplechar">Examplechar</a> is forced out of hiding.'
+      expect(line).not_to match(term::ANY)
+    end
+  end
+
   describe 'Term::REVEALED_VOLN_SLEEP (Order of Voln Symbol of Sleep)' do
     # Raw XML captured from a live `sym of sleep` cast (logxml.lic).
     let(:line) do
