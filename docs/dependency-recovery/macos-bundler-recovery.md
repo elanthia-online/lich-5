@@ -9,8 +9,10 @@ runtime gems such as `ox`; it is not a macOS GTK installer.
 - macOS only; Linux keeps the ordinary missing-gem message.
 - Only the `:default` Bundler group is eligible.
 - `gtk`, `development`, `vscode`, and `profanity` are explicitly excluded.
-- GTK remains required for a graphical launch unless `--no-gui` or `--no-gtk`
-  is present, but Lich never attempts to install GTK through this path.
+- Startup checks only the default group: the WebUI launcher has no GTK gem
+  dependency. `--no-gui` suppresses that launcher; `--no-gtk` is its legacy alias,
+  not a switch between native GTK and WebUI. The retained `gtk` exclusion does
+  not make GTK a current runtime requirement.
 
 ## Recovery flow
 

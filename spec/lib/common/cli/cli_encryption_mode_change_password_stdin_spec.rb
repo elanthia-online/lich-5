@@ -66,7 +66,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
       $stdin = StringIO.new("piped-master-pass\r\n")
 
       expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass')
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass', manager: manager)
     end
 
     it 'validates and stores the piped password without the UTF-8 byte-order mark Windows PowerShell 5.1 puts in front' do
@@ -77,7 +77,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
 
       expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
       expect(manager).to have_received(:new_password_refusal).with('piped-master-pass')
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass')
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'piped-master-pass', manager: manager)
     end
 
     it 'prints no prompt for a piped line' do
@@ -92,7 +92,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
 
       expect(described_class.change_mode(:enhanced, password_stdin: true)).to eq(0)
       expect($stdout).to have_received(:print).with('Enter new master password: ')
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'typed-master-pass')
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :enhanced, 'typed-master-pass', manager: manager)
     end
 
     it 'applies the shared new-password rule to the piped line, writing nothing' do
@@ -119,7 +119,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
       $stdin = StringIO.new(" padded secret \n")
 
       expect(described_class.change_mode(:standard, password_stdin: true)).to eq(0)
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :standard, nil)
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :standard, nil, manager: manager)
     end
 
     it 'returns 1 for a piped line that is not the current master password' do
@@ -133,7 +133,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
       $stdin = StringIO.new(" padded secret \nyes\n")
 
       expect(described_class.change_mode(:plaintext, password_stdin: true)).to eq(0)
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :plaintext, nil)
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :plaintext, nil, manager: manager)
     end
 
     it 'asks for the current master password by name when stdin is a terminal' do
@@ -154,7 +154,7 @@ RSpec.describe Lich::Common::CLI::EncryptionModeChange do
 
       expect(described_class.change_mode(:standard, password_stdin: true)).to eq(0)
       expect($stdin.pos).to eq(0)
-      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :standard, nil)
+      expect(entry_store).to have_received(:change_encryption_mode).with(anything, :standard, nil, manager: manager)
     end
   end
 end
