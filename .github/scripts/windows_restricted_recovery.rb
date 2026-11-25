@@ -46,6 +46,10 @@ module WindowsRestrictedRecovery
   STABLE_BUNDLE_URL = 'https://github.com/elanthia-online/Ruby4Lich5/releases/download/' \
                       'R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-bundle-x64-mingw-ucrt.zip'
   OLD_TAG = ENV.fetch('LICH_RESTRICTED_OLD_TAG', 'v5.24.2')
+  # Forks usually do not carry upstream release tags, so a tag missing from
+  # origin is fetched from the canonical repository instead.
+  OLD_TAG_FALLBACK_REMOTE = ENV.fetch('LICH_RESTRICTED_OLD_TAG_REMOTE',
+                                      'https://github.com/elanthia-online/lich-5.git')
   OLD_FILES = %w[lib/dependency_recovery.rb lib/recovery_unit_policy.rb].freeze
   # gtk3 is the reported failure: a native unit from the candidate-tag zip,
   # replaced by the detached rubyw helper. os is a pure-Ruby unit from the
@@ -385,11 +389,7 @@ module WindowsRestrictedRecovery
     def fetch_old_lib
       dir = File.join(@work, "old-#{OLD_TAG}", 'lib')
       FileUtils.mkdir_p(dir)
-      unless system('git', '-C', REPO_ROOT, 'rev-parse', '-q', '--verify', "refs/tags/#{OLD_TAG}", out: File::NULL, err: File::NULL)
-        fetched = system('git', '-C', REPO_ROOT, 'fetch', '--no-tags', '--depth=1', 'origin',
-                         "+refs/tags/#{OLD_TAG}:refs/tags/#{OLD_TAG}")
-        abort!("could not fetch tag #{OLD_TAG}") unless fetched
-      end
+      ensure_old_tag
       OLD_FILES.each do |file|
         content = IO.popen(['git', '-C', REPO_ROOT, 'show', "#{OLD_TAG}:#{file}"], 'rb', &:read)
         abort!("git show #{OLD_TAG}:#{file} failed") unless $?.success? && !content.empty?
@@ -400,6 +400,22 @@ module WindowsRestrictedRecovery
         abort!("#{OLD_TAG}:lib/dependency_recovery.rb does not contain the wscript/PowerShell extractor")
       end
       dir
+    end
+
+    # Makes OLD_TAG available locally: origin first, then the canonical repo.
+    # Only the last attempt's git errors are shown, so a fork's expected miss
+    # on origin does not print a stray "fatal:" line.
+    def ensure_old_tag
+      ref = "refs/tags/#{OLD_TAG}"
+      return if system('git', '-C', REPO_ROOT, 'rev-parse', '-q', '--verify', ref, out: File::NULL, err: File::NULL)
+
+      remotes = ['origin', OLD_TAG_FALLBACK_REMOTE].uniq
+      found = remotes.find do |remote|
+        quiet = remote == remotes.last ? {} : { err: File::NULL }
+        system('git', '-C', REPO_ROOT, 'fetch', '--no-tags', '--depth=1', remote, "+#{ref}:#{ref}", **quiet)
+      end
+      abort!("could not fetch tag #{OLD_TAG} from #{remotes.join(' or ')}") unless found
+      record('setup', "#{OLD_TAG} tag", "fetched from #{found}") unless found == 'origin'
     end
 
     # -- PowerShell / registry probes ----------------------------------------
