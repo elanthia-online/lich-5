@@ -137,4 +137,43 @@ RSpec.describe Lich::Gemstone::Overwatch do
       end
     end
   end
+
+  describe 'Term::REVEALED_STALKER_BITE (sleek black kiramon stalker)' do
+    # Raw XML captured live; player name anonymized.
+    {
+      'the 1st-person view (attacking you)'            => [
+        '24776471',
+        'Without warning, <pushBold/>a <a exist="24776471" noun="stalker">sleek black kiramon stalker</a><popBold/> ' \
+          'glides from the shadows and aims a preternaturally swift bite at you!'
+      ],
+      'the 3rd-person view (attacking another player)' => [
+        '24776474',
+        'Without warning, <pushBold/>a <a exist="24776474" noun="stalker">sleek black kiramon stalker</a><popBold/> ' \
+          'glides from the shadows and aims a preternaturally swift bite at <a exist="-1234567" noun="Examplechar">Examplechar</a>!'
+      ],
+    }.each do |desc, (id, raw)|
+      context desc do
+        let(:line) { raw }
+
+        it 'captures the revealed creature id, noun and name' do
+          match = line.match(term::REVEALED_STALKER_BITE)
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('stalker')
+          expect(match[:name]).to eq('sleek black kiramon stalker')
+        end
+
+        it 'is part of ANY_REVEALED and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_REVEALED)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature into the target list via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with(id, 'stalker', 'sleek black kiramon stalker')
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
 end
