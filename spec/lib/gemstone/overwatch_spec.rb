@@ -18,6 +18,11 @@ RSpec.describe Lich::Gemstone::Overwatch do
         :REVEALED_FORCED_OUT, '10488885', 'assassin', 'triton assassin',
         '<pushBold/>A <a exist="10488885" noun="assassin">triton assassin</a><popBold/> is forced out of hiding.'
       ],
+      'forced out of hiding (bang)'      => [
+        # spec/fixtures/bloom_forced_out_of_hiding.txt:24
+        :REVEALED_FORCED_OUT, '128104042', 'cannibal', 'bloody halfling cannibal',
+        '<pushBold/>A <a exist="128104042" noun="cannibal">bloody halfling cannibal</a><popBold/> is forced out of hiding!'
+      ],
       'falls out of hiding'              => [
         :REVEALED_FALLS_OUT, '148417050', 'warden', 'radiant triton warden',
         '<pushBold/>A <a exist="148417050" noun="warden">radiant triton warden</a><popBold/> falls out of hiding!'
