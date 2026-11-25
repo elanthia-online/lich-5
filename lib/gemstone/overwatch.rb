@@ -150,12 +150,26 @@ module Lich
             /Something stirs in the shadows\./,
             /The figure quickly disappears from view\./,
             /<pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/> blends with the shadows, moving too swiftly for the eye to follow\./,
-            /You notice the hiding place of <pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/>, but do not reveal your hidden position./
+            /You notice the hiding place of <pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/>, but do not reveal your hidden position./,
+            # Creatures sneaking into the room; no creature id, the same in every view
+            # Masked goliath plunderer
+            /You think you hear footsteps\./,
+            # Bloody halfling cannibal
+            /You hear soft footfalls\./
           )
 
           # Patterns for creatures being revealed from hiding
           REVEALED_DISCOVERY = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed from hiding\./
           REVEALED_FORCED = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is forced from hiding\!/
+          # Another player finds a hidden creature (3rd-person form of REVEALED_YOU_DISCOVER)
+          REVEALED_PLAYER_DISCOVERS = /<a exist="-\d+" noun="\w+">[^<]+<\/a> discovers the hiding place of <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
+          # Both terminators are live: "." (triton warden/assassin) and "!" (bloody halfling cannibal)
+          REVEALED_FORCED_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is forced out of hiding[.!]/
+          REVEALED_FALLS_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> falls out of hiding\!/
+          # Both live: "is knocked from hiding." and "is knocked out of hiding by the gust!"
+          REVEALED_KNOCKED = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is knocked (?:from hiding\.|out of hiding by the gust\!)/
+          # Bandit ambush
+          REVEALED_JUMPS_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> suddenly jumps out of the shadows\!/
           REVEALED_COMES_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> comes out of hiding\./
           REVEALED_LEAPS_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps out of <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> hiding place\!/
           REVEALED_SUDDENLY_LEAPS = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> suddenly leaps from <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> hiding place\!/
@@ -210,6 +224,11 @@ module Lich
             REVEALED_SHADOWS_MELT,
             REVEALED_YOU_DISCOVER,
             REVEALED_YOU_REVEAL,
+            REVEALED_PLAYER_DISCOVERS,
+            REVEALED_FORCED_OUT,
+            REVEALED_FALLS_OUT,
+            REVEALED_KNOCKED,
+            REVEALED_JUMPS_OUT,
             REVEALED_WALL_THORNS,
             REVEALED_FLAMING_AURA,
             REVEALED_EXPLODES,
