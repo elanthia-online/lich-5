@@ -156,7 +156,8 @@ module Lich
           REVEALED_SHADOWS_MELT = /The shadows melt away to reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>!/
           REVEALED_YOU_DISCOVER = /You discover the hiding place of <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_YOU_REVEAL = /You reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> from hiding\!/
-          REVEALED_WALL_THORNS = /The thorny barrier surrounding you blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
+          # Thorn Barrier; matches both the 1st-person (you) and 3rd-person (another player) views
+          REVEALED_WALL_THORNS = /The thorny barrier surrounding (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_FLAMING_AURA = /The flaming aura surrounding you lashes out at <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who is forced into view!/
           # Order of Voln Symbol of Sleep reveals hidden creatures before putting them to sleep
           REVEALED_VOLN_SLEEP = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed by the pattern!/
@@ -169,10 +170,10 @@ module Lich
           REVEALED_AC_AVIAN = /<pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/> dives ahead while flapping <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> wings, exposing <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who was hidden\!/
 
           # Kiramon stalker specific reveals
-          # Bite matches both the 1st-person (you) and 3rd-person (another player) views
+          # Bite, stinger and slash ambushes match both the 1st-person (you) and 3rd-person (another player) views
           REVEALED_STALKER_BITE = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and aims a preternaturally swift bite at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>)\!/
-          REVEALED_STALKER_STINGER = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> twists fluidly to spear you with <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> barbed stinger\!/
-          REVEALED_STALKER_SLASH = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and skitters mercilessly forward to slash at you with a razor-sharp foreleg\!/
+          REVEALED_STALKER_STINGER = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and twists fluidly to spear (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> barbed stinger\!/
+          REVEALED_STALKER_SLASH = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and skitters mercilessly forward to slash at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with a razor-sharp foreleg\!/
           REVEALED_STALKER_INTERPOSE = /As you attempt to hide, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides past you in a single fluid motion, interposing between you and the safety of the shadows\./
           REVEALED_STALKER_MISS = /Caught unaware, you can only stare in fascination as <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> manages to completely miss you while nearly dropping <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/>  in the process\./
 
