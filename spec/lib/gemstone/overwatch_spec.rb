@@ -138,6 +138,45 @@ RSpec.describe Lich::Gemstone::Overwatch do
     end
   end
 
+  describe 'Term::SILENT_STALKER_SAVAGE (kiramon stalker)' do
+    # Raw XML captured live; player name and id anonymized. The stalker is linked only as "it", so the
+    # observer reports it as an unknown assailant.
+    {
+      '1st-person view (attacking you)'            => [
+        '26577119',
+        'Catching you unaware, <pushBold/><a exist="26577119" noun="stalker">it</a><popBold/> ' \
+          'carves into you with cruel and ruthless savagery!'
+      ],
+      '3rd-person view (attacking another player)' => [
+        '24776474',
+        'Catching <a exist="-1234567" noun="Examplechar">him</a> unaware, <pushBold/><a exist="24776474" noun="stalker">it</a><popBold/> ' \
+          'carves into <a exist="-1234567" noun="Examplechar">Examplechar</a> with cruel and ruthless savagery!'
+      ],
+    }.each do |view, (id, raw)|
+      context view do
+        let(:line) { raw }
+
+        it 'captures the creature id and noun' do
+          match = line.match(term::SILENT_STALKER_SAVAGE)
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('stalker')
+        end
+
+        it 'is part of ANY_SILENT_STRIKE and ANY so the observer sees it' do
+          expect(line).to match(term::ANY_SILENT_STRIKE)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature as a silent strike via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets)
+            .with(id, 'stalker', 'unknown assailant', silent_strike: true)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
+
   describe 'kiramon stalker ambushes and Thorn Barrier blocks (Term::REVEALED_*)' do
     # Raw XML captured live; player names and ids anonymized.
     stalker = '<pushBold/>a <a exist="%<id>s" noun="stalker">sleek black kiramon stalker</a><popBold/>'

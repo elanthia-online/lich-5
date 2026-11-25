@@ -184,7 +184,8 @@ module Lich
           SILENT_CANNIBAL_GRAPPLE = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and throws <pushBold\/><a exist="\d+" noun="[^"]+">(?:his|her)<\/a><popBold\/> wiry arms around (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>), fueled by panicked hunger!/
           SILENT_LEAP_ATTACK = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from hiding to attack\!/
           SILENT_SUBDUE = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and aims a blow to your head\!/
-          SILENT_STALKER_SAVAGE = /Catching you unaware, <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> carves into you with cruel and ruthless savagery\!/
+          # Kiramon stalker; matches both the 1st-person (you) and 3rd-person (another player, linked once as him/her) views
+          SILENT_STALKER_SAVAGE = /Catching (?:you|<a exist="-\d+" noun="\w+">\w+<\/a>) unaware, <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> carves into (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with cruel and ruthless savagery\!/
 
           # Combined patterns for efficient matching
           ANY_REVEALED = Regexp.union(
