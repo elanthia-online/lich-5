@@ -223,4 +223,58 @@ RSpec.describe Lich::Gemstone::Overwatch do
       end
     end
   end
+
+  describe 'Term::REVEALED_STALKER_STUMBLE / REVEALED_STALKER_MISS_BYSTANDER (kiramon stalker)' do
+    # Raw XML captured live; player names and ids anonymized.
+    {
+      'stumble (sleek black stalker)' => [
+        '24776474', 'sleek black kiramon stalker',
+        '<pushBold/>A <a exist="24776474" noun="stalker">sleek black kiramon stalker</a><popBold/> stumbles slightly as ' \
+          '<pushBold/><a exist="24776474" noun="stalker">it</a><popBold/> leaps from hiding, revealing ' \
+          '<pushBold/><a exist="24776474" noun="stalker">itself</a><popBold/> in the process.'
+      ],
+      'stumble (grizzled stalker)'    => [
+        '26221097', 'grizzled kiramon stalker',
+        '<pushBold/>A <a exist="26221097" noun="stalker">grizzled kiramon stalker</a><popBold/> stumbles slightly as ' \
+          '<pushBold/><a exist="26221097" noun="stalker">it</a><popBold/> leaps from hiding, revealing ' \
+          '<pushBold/><a exist="26221097" noun="stalker">itself</a><popBold/> in the process.'
+      ],
+      'missed ambush, bystander view' => [
+        '24776477', 'unknown assailant',
+        'Though <a exist="-1234567" noun="Examplechar">Examplechar</a> is caught unaware, ' \
+          '<a exist="-1234567" noun="Examplechar">his</a> attacker manages to completely ruin ' \
+          '<pushBold/><a exist="24776477" noun="stalker">its</a><popBold/> opportunity by missing ' \
+          '<pushBold/><a exist="24776477" noun="stalker">its</a><popBold/> strike, nearly losing ' \
+          '<pushBold/><a exist="24776477" noun="stalker">its</a><popBold/> balance in the process.'
+      ],
+    }.each do |what, (id, name, raw)|
+      context what do
+        let(:line) { raw }
+
+        it 'captures the creature id and noun' do
+          match = line.match(term::ANY_REVEALED)
+          expect(match).not_to be_nil
+          expect(match[:id]).to eq(id)
+          expect(match[:noun]).to eq('stalker')
+        end
+
+        it 'is seen by the observer' do
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'pushes the creature into the target list via Observer.consume' do
+          expect(described_class).to receive(:push_revealed_targets).with(id, 'stalker', name)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+
+    it 'does not treat a player missing a hidden attack on a creature as a stalker miss' do
+      # Live capture; the attacker is a hidden player and the victim a creature.
+      line = 'Though <pushBold/>a <a exist="11755131" noun="rogue">human rogue</a><popBold/> is caught unaware, ' \
+             'you manage to completely miss your strike and nearly drop your ' \
+             '<a exist="11755140" noun="greatsword">mithril greatsword</a> in the process.  Not your smoothest move.'
+      expect(line).not_to match(term::ANY)
+    end
+  end
 end

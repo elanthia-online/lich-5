@@ -174,8 +174,13 @@ module Lich
           REVEALED_STALKER_BITE = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and aims a preternaturally swift bite at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>)\!/
           REVEALED_STALKER_STINGER = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and twists fluidly to spear (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> barbed stinger\!/
           REVEALED_STALKER_SLASH = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and skitters mercilessly forward to slash at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with a razor-sharp foreleg\!/
+          # Botched ambush: the stalker reveals itself before its attack; same wording whoever the target is
+          REVEALED_STALKER_STUMBLE = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> stumbles slightly as <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> leaps from hiding, revealing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> in the process\./
           REVEALED_STALKER_INTERPOSE = /As you attempt to hide, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides past you in a single fluid motion, interposing between you and the safety of the shadows\./
           REVEALED_STALKER_MISS = /Caught unaware, you can only stare in fascination as <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> manages to completely miss you while nearly dropping <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/>  in the process\./
+
+          # Bystander view of a missed ambush: the stalker is linked only by its pronoun (reported as an unknown assailant)
+          REVEALED_STALKER_MISS_BYSTANDER = /Though <a exist="-\d+" noun="\w+">[^<]+<\/a> is caught unaware, <a exist="-\d+" noun="\w+">\w+<\/a> attacker manages to completely ruin <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> opportunity by missing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> strike, nearly losing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> balance in the process\./
 
           # Silent strike patterns - attacks that may result in immediate rehiding
           SILENT_CUTTHROAT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and attempts to grasp you by the chin while bringing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a> up to slit your throat\!/
@@ -208,7 +213,9 @@ module Lich
             REVEALED_STALKER_STINGER,
             REVEALED_STALKER_SLASH,
             REVEALED_STALKER_INTERPOSE,
-            REVEALED_STALKER_MISS
+            REVEALED_STALKER_MISS,
+            REVEALED_STALKER_STUMBLE,
+            REVEALED_STALKER_MISS_BYSTANDER
           )
 
           ANY_SILENT_STRIKE = Regexp.union(
@@ -242,10 +249,11 @@ module Lich
           when Term::HIDING
             Overwatch.track_hidden_targets(XMLData.room_id)
           when Term::ANY_REVEALED
+            # Some reveals link the creature only by its pronoun, so there is no name to capture
             Overwatch.push_revealed_targets(
               match_data[:id],
               match_data[:noun],
-              match_data[:name]
+              match_data[:name] || "unknown assailant"
             )
           when Term::ANY_SILENT_STRIKE
             # Handle special case for unknown assailant
