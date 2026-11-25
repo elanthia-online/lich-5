@@ -6,6 +6,29 @@ require 'gemstone/overwatch'
 RSpec.describe Lich::Gemstone::Overwatch do
   let(:term) { described_class::Observer::Term }
 
+  describe 'Term::HIDING (creatures sneaking into the room)' do
+    # Live captures: neither line carries a creature id, and each reads the same in every view.
+    {
+      'masked goliath plunderer' => 'You think you hear footsteps.',
+      'bloody halfling cannibal' => 'You hear soft footfalls.',
+    }.each do |creature, raw|
+      context creature do
+        let(:line) { raw }
+
+        it 'is a HIDING line the observer sees' do
+          expect(line).to match(term::HIDING)
+          expect(described_class::Observer.wants?(line)).to be_truthy
+        end
+
+        it 'marks the current room as having a hider via Observer.consume' do
+          allow(XMLData).to receive(:room_id).and_return(29_891)
+          expect(described_class).to receive(:track_hidden_targets).with(29_891)
+          described_class::Observer.consume(line, described_class::Observer.wants?(line))
+        end
+      end
+    end
+  end
+
   describe 'creature reveals with no 1st-person target (Term::REVEALED_*)' do
     # Raw XML captured live; player names and ids anonymized.
     {

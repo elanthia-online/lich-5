@@ -144,7 +144,12 @@ module Lich
             /Something stirs in the shadows\./,
             /The figure quickly disappears from view\./,
             /<pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/> blends with the shadows, moving too swiftly for the eye to follow\./,
-            /You notice the hiding place of <pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/>, but do not reveal your hidden position./
+            /You notice the hiding place of <pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/>, but do not reveal your hidden position./,
+            # Creatures sneaking into the room; no creature id, the same in every view
+            # Masked goliath plunderer
+            /You think you hear footsteps\./,
+            # Bloody halfling cannibal
+            /You hear soft footfalls\./
           )
 
           # Patterns for creatures being revealed from hiding
