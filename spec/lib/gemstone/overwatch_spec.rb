@@ -54,6 +54,12 @@ RSpec.describe Lich::Gemstone::Overwatch do
         :REVEALED_KNOCKED, '24952721', 'stalker', 'sleek black kiramon stalker',
         '<pushBold/>A <a exist="24952721" noun="stalker">sleek black kiramon stalker</a><popBold/> is knocked from hiding.'
       ],
+      'knocked out of hiding by a gust'  => [
+        :REVEALED_KNOCKED, '41428356', 'stalker', 'sleek black kiramon stalker',
+        '<pushBold/>A <a exist="41428356" noun="stalker">sleek black kiramon stalker</a><popBold/> is knocked out of hiding by the gust!  ' \
+          '<pushBold/>A <a exist="41428356" noun="stalker">sleek black kiramon stalker</a><popBold/> loses ' \
+          '<pushBold/><a exist="41428356" noun="stalker">its</a><popBold/> balance and falls over!'
+      ],
       'bandit jumps out of the shadows'  => [
         :REVEALED_JUMPS_OUT, '210393802', 'robber', 'gnomish robber',
         '<pushBold/>A <a exist="210393802" noun="robber">gnomish robber</a><popBold/> suddenly jumps out of the shadows!'

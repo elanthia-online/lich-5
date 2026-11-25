@@ -160,7 +160,8 @@ module Lich
           # Both terminators are live: "." (triton warden/assassin) and "!" (bloody halfling cannibal)
           REVEALED_FORCED_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is forced out of hiding[.!]/
           REVEALED_FALLS_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> falls out of hiding\!/
-          REVEALED_KNOCKED = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is knocked from hiding\./
+          # Both live: "is knocked from hiding." and "is knocked out of hiding by the gust!"
+          REVEALED_KNOCKED = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is knocked (?:from hiding\.|out of hiding by the gust\!)/
           # Bandit ambush
           REVEALED_JUMPS_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> suddenly jumps out of the shadows\!/
           REVEALED_COMES_OUT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> comes out of hiding\./
