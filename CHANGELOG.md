@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.25.1](https://github.com/elanthia-online/lich-5/compare/v5.25.0...v5.25.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **all:** allow owner/repo:branch in lich5-update --branch for allowlisted owners ([#2422](https://github.com/elanthia-online/lich-5/issues/2422)) ([6965905](https://github.com/elanthia-online/lich-5/commit/696590500728dd2ecfe2965dadbfe8dc4aef6e5e))
+* **all:** capture issue_command replies from one hook state machine ([#2421](https://github.com/elanthia-online/lich-5/issues/2421)) ([182c9f3](https://github.com/elanthia-online/lich-5/commit/182c9f3b17ff8a30ca401ab1cde015347de11ec0))
+* **all:** clear list highlight after Add/Delete ([#2469](https://github.com/elanthia-online/lich-5/issues/2469)) ([95539c3](https://github.com/elanthia-online/lich-5/commit/95539c35866533ac3ddeac45fa0a4b415a844470))
+* **all:** fetch the restricted-recovery baseline tag from upstream on forks ([#2496](https://github.com/elanthia-online/lich-5/issues/2496)) ([fa61223](https://github.com/elanthia-online/lich-5/commit/fa6122380083a55db5e56d654bf2f54178019355))
+* **all:** harden lich5-update ahead of 5.26 ([#2430](https://github.com/elanthia-online/lich-5/issues/2430)) ([cc0283b](https://github.com/elanthia-online/lich-5/commit/cc0283b1d6687002321c2453bdc581863e525b50))
+* **all:** keep player titles in GameObj.pcs after " and " and status prefixes ([#2481](https://github.com/elanthia-online/lich-5/issues/2481)) ([4b57d31](https://github.com/elanthia-online/lich-5/commit/4b57d31cdf3827bb343c6e203a44790dca0b030c))
+* **all:** report Cmd as meta on surface clicks ([#2471](https://github.com/elanthia-online/lich-5/issues/2471)) ([d2fd634](https://github.com/elanthia-online/lich-5/commit/d2fd6341b721ab36c0b9ade4819c479cc538f1dc))
+* **all:** resolve open CodeQL code-scanning alerts ([#2488](https://github.com/elanthia-online/lich-5/issues/2488)) ([7daca8e](https://github.com/elanthia-online/lich-5/commit/7daca8e92e52211ee64270a79dc313d74eaf0de4))
+* **all:** stop SetupFiles leaking file descriptors when a script is killed ([#2456](https://github.com/elanthia-online/lich-5/issues/2456)) ([b805e82](https://github.com/elanthia-online/lich-5/commit/b805e8293dc7968e548f244290119d765832d43f))
+* **dr:** read DRRoom.pcs from player links on the Saga-identity stream ([#2472](https://github.com/elanthia-online/lich-5/issues/2472)) ([3e552b4](https://github.com/elanthia-online/lich-5/commit/3e552b4ae58831f5d005eba400fb435db627a056))
+* **gs:** Overwatch 3rd-person reveals and silent strikes; Infomon group check no longer drops them ([#2427](https://github.com/elanthia-online/lich-5/issues/2427)) ([8555d00](https://github.com/elanthia-online/lich-5/commit/8555d0005c5f39ccb22e7a0e1849492a844f8b46))
+* **gs:** Overwatch kiramon stalker reveals and 3rd-person Thorn Barrier ([#2491](https://github.com/elanthia-online/lich-5/issues/2491)) ([b6580f5](https://github.com/elanthia-online/lich-5/commit/b6580f5cd0989d7486b972c0143fd0d8215a3b0d))
+* **gs:** Overwatch missed creature reveal messages ([#2492](https://github.com/elanthia-online/lich-5/issues/2492)) ([757eafb](https://github.com/elanthia-online/lich-5/commit/757eafbec50078f80d4d3fc5b5c84d73d5bfd49f))
+
 ## [5.25.0](https://github.com/elanthia-online/lich-5/compare/v5.24.2...v5.25.0) (2026-11-18)
 
 
