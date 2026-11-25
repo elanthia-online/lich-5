@@ -119,7 +119,7 @@ jobs:
         run: bash .github/tests/test-guard-pre-branch-pr.sh
       # The bundling script loads Lich's own script-header parser, so its test
       # runs on the repository's Ruby rather than the runner's.
-      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         with:
           bundler: none
           bundler-cache: false
@@ -210,7 +210,7 @@ jobs:
         if: steps.preflight.outputs.should_test == 'true'
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           bundler-cache: true
@@ -270,7 +270,7 @@ jobs:
         if: steps.list.outputs.specs != ''
         with:
           persist-credentials: false
-      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+      - uses: ruby/setup-ruby@be3c7df29b3349ec6bcfc6b4792f1cf9f5237d18 # v1.343.0
         if: steps.list.outputs.specs != ''
         with:
           bundler-cache: true
