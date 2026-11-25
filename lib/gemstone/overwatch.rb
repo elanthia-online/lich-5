@@ -77,7 +77,10 @@ module Lich
       #
       # @param target_id [String] the target's game object ID
       # @param target_noun [String] the target's noun
-      # @param target_name [String] the target's full name
+      # @param target_name [String, nil] the target's full name, or nil when the line links the
+      #   creature only by its pronoun. A nameless reveal only adds the id to the target list: the
+      #   NPC is registered by the next line or room refresh that names it, so no placeholder name
+      #   can shadow the real one.
       # @param silent_strike [Boolean] whether to check for silent strike rehide
       # @return [void]
       def self.push_revealed_targets(target_id, target_noun, target_name, silent_strike: false)
@@ -108,8 +111,9 @@ module Lich
 
         respond "push_revealed_targets(#{target_id}, #{target_noun}, #{target_name}, silent_strike: #{silent_strike})" if @@debug
 
-        # Add to GameObj.npcs if not already present
-        unless GameObj.npcs.any? { |npc| npc.id == target_id }
+        # Add to GameObj.npcs if not already present (and only once its name is known)
+        # GameObj.npcs is nil while the registry is empty
+        if target_name && (GameObj.npcs || []).none? { |npc| npc.id == target_id }
           GameObj.new_npc(target_id, target_noun, target_name.gsub(/  /, " "))
           respond "#{target_id} added to GameObj.npcs." if @@debug
         end
@@ -130,6 +134,8 @@ module Lich
         module Term
           # Patterns for creatures entering hiding
           HIDING = Regexp.union(
+            # Hive kiramon stalker moving unseen; no creature id, the same in every view
+            /You get the intense, terrifying feeling that you are being watched\./,
             /<pushBold\/>\w+ <a exist="\d+" noun="\w+">[^<]+<\/a><popBold\/> slips into hiding\./,
             /flies out of the shadows toward you\!/,
             /A faint silvery light flickers from the shadows\./,
@@ -156,7 +162,8 @@ module Lich
           REVEALED_SHADOWS_MELT = /The shadows melt away to reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>!/
           REVEALED_YOU_DISCOVER = /You discover the hiding place of <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_YOU_REVEAL = /You reveal <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> from hiding\!/
-          REVEALED_WALL_THORNS = /The thorny barrier surrounding you blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
+          # Thorn Barrier; matches both the 1st-person (you) and 3rd-person (another player) views
+          REVEALED_WALL_THORNS = /The thorny barrier surrounding (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) blocks the attack from the <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>\!/
           REVEALED_FLAMING_AURA = /The flaming aura surrounding you lashes out at <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who is forced into view!/
           # Order of Voln Symbol of Sleep reveals hidden creatures before putting them to sleep
           REVEALED_VOLN_SLEEP = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> is revealed by the pattern!/
@@ -169,11 +176,19 @@ module Lich
           REVEALED_AC_AVIAN = /<pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/> dives ahead while flapping <pushBold\/><a exist="\d+" noun="\w+">\w+<\/a><popBold\/> wings, exposing <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/>, who was hidden\!/
 
           # Kiramon stalker specific reveals
-          REVEALED_STALKER_BITE = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and aims a preternaturally swift bite at you\!/
-          REVEALED_STALKER_STINGER = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> twists fluidly to spear you with <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> barbed stinger\!/
-          REVEALED_STALKER_SLASH = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and skitters mercilessly forward to slash at you with a razor-sharp foreleg\!/
-          REVEALED_STALKER_INTERPOSE = /As you attempt to hide, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides past you in a single fluid motion, interposing between you and the safety of the shadows\./
-          REVEALED_STALKER_MISS = /Caught unaware, you can only stare in fascination as <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> manages to completely miss you while nearly dropping <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/>  in the process\./
+          # Bite, stinger and slash ambushes match both the 1st-person (you) and 3rd-person (another player) views
+          REVEALED_STALKER_BITE = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and aims a preternaturally swift bite at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>)\!/
+          REVEALED_STALKER_STINGER = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and twists fluidly to spear (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> barbed stinger\!/
+          REVEALED_STALKER_SLASH = /Without warning, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides from the shadows and skitters mercilessly forward to slash at (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with a razor-sharp foreleg\!/
+          # Botched ambush: the stalker reveals itself before its attack; same wording whoever the target is
+          REVEALED_STALKER_STUMBLE = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> stumbles slightly as <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> leaps from hiding, revealing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> in the process\./
+          # Interpose matches both the 1st-person (you) and 3rd-person (another player, then him/her) views
+          REVEALED_STALKER_INTERPOSE = /As (?:you attempt|<a exist="-\d+" noun="\w+">[^<]+<\/a> attempts) to hide, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> glides past (?:you|<a exist="-\d+" noun="\w+">\w+<\/a>) in a single fluid motion, interposing between (?:you|<a exist="-\d+" noun="\w+">\w+<\/a>) and the safety of the shadows\./
+          # The stalker is linked only by its pronoun, so there is no name to capture
+          REVEALED_STALKER_MISS = /Caught unaware, you can only stare in fascination as <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> manages to completely miss you while nearly losing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> balance in the process\./
+
+          # Bystander view of a missed ambush: the stalker is linked only by its pronoun, so there is no name to capture
+          REVEALED_STALKER_MISS_BYSTANDER = /Though <a exist="-\d+" noun="\w+">[^<]+<\/a> is caught unaware, <a exist="-\d+" noun="\w+">\w+<\/a> attacker manages to completely ruin <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> opportunity by missing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> strike, nearly losing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> balance in the process\./
 
           # Silent strike patterns - attacks that may result in immediate rehiding
           SILENT_CUTTHROAT = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and attempts to grasp you by the chin while bringing <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> <a exist="\d+" noun="[^"]+">[^<]+<\/a> up to slit your throat\!/
@@ -182,7 +197,8 @@ module Lich
           SILENT_CANNIBAL_GRAPPLE = /With an ululating shriek, <pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from the shadows and throws <pushBold\/><a exist="\d+" noun="[^"]+">(?:his|her)<\/a><popBold\/> wiry arms around (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>), fueled by panicked hunger!/
           SILENT_LEAP_ATTACK = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> leaps from hiding to attack\!/
           SILENT_SUBDUE = /<pushBold\/>\w+ <a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">(?<name>[^<]+)<\/a><popBold\/> springs upon you from behind and aims a blow to your head\!/
-          SILENT_STALKER_SAVAGE = /Catching you unaware, <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> carves into you with cruel and ruthless savagery\!/
+          # Kiramon stalker; matches both the 1st-person (you) and 3rd-person (another player, linked once as him/her) views
+          SILENT_STALKER_SAVAGE = /Catching (?:you|<a exist="-\d+" noun="\w+">\w+<\/a>) unaware, <pushBold\/><a exist="(?<id>\d+)" noun=" ?(?<noun>\w+)">\w+<\/a><popBold\/> carves into (?:you|<a exist="-\d+" noun="\w+">[^<]+<\/a>) with cruel and ruthless savagery\!/
 
           # Combined patterns for efficient matching
           ANY_REVEALED = Regexp.union(
@@ -205,7 +221,9 @@ module Lich
             REVEALED_STALKER_STINGER,
             REVEALED_STALKER_SLASH,
             REVEALED_STALKER_INTERPOSE,
-            REVEALED_STALKER_MISS
+            REVEALED_STALKER_MISS,
+            REVEALED_STALKER_STUMBLE,
+            REVEALED_STALKER_MISS_BYSTANDER
           )
 
           ANY_SILENT_STRIKE = Regexp.union(
@@ -239,6 +257,7 @@ module Lich
           when Term::HIDING
             Overwatch.track_hidden_targets(XMLData.room_id)
           when Term::ANY_REVEALED
+            # The stalker misses link the creature only by its pronoun, so :name can be nil
             Overwatch.push_revealed_targets(
               match_data[:id],
               match_data[:noun],
