@@ -134,6 +134,8 @@ module Lich
         module Term
           # Patterns for creatures entering hiding
           HIDING = Regexp.union(
+            # Hive kiramon stalker moving unseen; no creature id, the same in every view
+            /You get the intense, terrifying feeling that you are being watched\./,
             /<pushBold\/>\w+ <a exist="\d+" noun="\w+">[^<]+<\/a><popBold\/> slips into hiding\./,
             /flies out of the shadows toward you\!/,
             /A faint silvery light flickers from the shadows\./,

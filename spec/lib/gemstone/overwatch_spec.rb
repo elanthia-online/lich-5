@@ -302,6 +302,22 @@ RSpec.describe Lich::Gemstone::Overwatch do
     end
   end
 
+  describe 'Term::HIDING (kiramon stalker being watched)' do
+    # Live capture: the line carries no creature id and reads the same in every view.
+    let(:line) { 'You get the intense, terrifying feeling that you are being watched.' }
+
+    it 'is a HIDING line the observer sees' do
+      expect(line).to match(term::HIDING)
+      expect(described_class::Observer.wants?(line)).to be_truthy
+    end
+
+    it 'marks the current room as having a hider via Observer.consume' do
+      allow(XMLData).to receive(:room_id).and_return(13_010_300)
+      expect(described_class).to receive(:track_hidden_targets).with(13_010_300)
+      described_class::Observer.consume(line, described_class::Observer.wants?(line))
+    end
+  end
+
   describe '.push_revealed_targets with a nameless reveal (real GameObj registry)' do
     # Live captures; player name and id anonymized. The bystander miss names the stalker only by its
     # pronoun; the Thorn Barrier block names it.
