@@ -136,6 +136,8 @@ module Lich
           HIDING = Regexp.union(
             # Hive kiramon stalker moving unseen; no creature id, the same in every view
             /You get the intense, terrifying feeling that you are being watched\./,
+            # Kiramon stalker re-hiding; often with no "blends with the shadows" line after it
+            /<pushBold\/>\w+ <a exist="\d+" noun=" ?\w+">[^<]+<\/a><popBold\/> steps back into the shadows, <pushBold\/><a exist="\d+" noun=" ?\w+">\w+<\/a><popBold\/> ebon carapace blending with the darkness\./,
             /<pushBold\/>\w+ <a exist="\d+" noun="\w+">[^<]+<\/a><popBold\/> slips into hiding\./,
             /flies out of the shadows toward you\!/,
             /A faint silvery light flickers from the shadows\./,
