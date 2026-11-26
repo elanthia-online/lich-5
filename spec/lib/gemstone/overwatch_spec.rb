@@ -390,6 +390,32 @@ RSpec.describe Lich::Gemstone::Overwatch do
     end
   end
 
+  describe 'Term::HIDING (kiramon stalker steps back into the shadows)' do
+    # Live capture. The stalker re-hides; a "blends with the shadows" line does not always follow.
+    let(:line) do
+      '<pushBold/>A <a exist="16085905" noun="stalker">sleek black kiramon stalker</a><popBold/> steps back into the shadows, ' \
+        '<pushBold/><a exist="16085905" noun="stalker">its</a><popBold/> ebon carapace blending with the darkness.'
+    end
+
+    it 'is a HIDING line, not a reveal' do
+      expect(line).to match(term::HIDING)
+      expect(line).not_to match(term::ANY_REVEALED)
+      expect(line).not_to match(term::ANY_SILENT_STRIKE)
+    end
+
+    it 'marks the current room as having a hider via Observer.consume' do
+      allow(XMLData).to receive(:room_id).and_return(13_010_300)
+      expect(described_class).to receive(:track_hidden_targets).with(13_010_300)
+      described_class::Observer.consume(line, described_class::Observer.wants?(line))
+    end
+
+    it 'does not match an NPC stepping back into the shadows in a quest message' do
+      # Live capture (plain text; the speaker is not a bold creature link).
+      line = 'With that, he steps back into the shadows, waiting for you to fulfill his last request.'
+      expect(line).not_to match(term::ANY)
+    end
+  end
+
   describe 'Term::HIDING (kiramon stalker being watched)' do
     # Live capture: the line carries no creature id and reads the same in every view.
     let(:line) { 'You get the intense, terrifying feeling that you are being watched.' }
