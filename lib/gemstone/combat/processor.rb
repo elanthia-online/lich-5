@@ -943,6 +943,11 @@ module Lich
                 current_target = line_target
                 respond "[Combat] Switched to target: #{line_target[:name]} (#{line_target[:id]})" if Tracker.debug?(:verbose)
 
+              elsif current_target.nil? && current_event[:target_name] &&
+                    !current_event[:target_name].casecmp?(line_target[:name].to_s)
+                # An unlinked target name the room couldn't resolve: a line
+                # naming a DIFFERENT creature is not this event's victim.
+                respond "[Combat] Kept #{current_event[:target_name]} unbound, not #{line_target[:name]}" if Tracker.debug?(:verbose)
               elsif current_target.nil?
                 # First target for current event - just set it, don't discard
                 # data. But a creature can never be its own victim: on a 3p
@@ -1309,7 +1314,13 @@ module Lich
               current_event = {
                 source: superseded_cast ? superseded_source : source,
                 name: attack[:name],
-                target: attack[:target] || {},
+                # An unlinked creature name (Earthen Fury's eruption lines)
+                # binds to the room's creature when exactly one alive creature
+                # carries that name (#2415).
+                target: (attack[:target] && !attack[:target].empty? ? attack[:target] : resolve_unlinked_target(attack[:target_name])) || {},
+                # Still unbound: only a creature with this name may be adopted
+                # later in the chunk, never whichever creature is named next.
+                target_name: attack[:target_name],
                 attacker: attack[:attacker], # nil for our own (2nd-person) attacks
                 # Aimed at US. Carries no creature target, so event_savable?
                 # drops it and its damage/crits are never applied to the
@@ -2339,6 +2350,26 @@ module Lich
                           tier: ucs_result[:tier])
         rescue => e
           respond "[Combat] Error applying UCS: #{e.message}" if Tracker.debug?(:verbose)
+        end
+
+        # The room's creature an unlinked target name refers to, when exactly
+        # one alive creature in the room carries that name; nil otherwise
+        # (same-named creatures stay unbound rather than guess).
+        #
+        # @param name [String, nil] the printed name, article removed
+        # @return [Hash, nil] {id:, noun:, name:}
+        def resolve_unlinked_target(name)
+          return nil if name.nil? || !defined?(Creature) || !Creature.respond_to?(:in_room)
+
+          matches = Creature.in_room.select do |c|
+            c.name.to_s.casecmp?(name) && !(c.respond_to?(:dead?) && c.dead?)
+          end
+          return nil unless matches.size == 1
+
+          creature = matches.first
+          { id: creature.id.to_i, noun: creature.noun, name: creature.name }
+        rescue StandardError
+          nil
         end
 
         # Apply status effect directly to a creature (outside combat events)

@@ -146,6 +146,29 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  # elanthia-online/lich-5#2415 (case 3): an Earthen Fury eruption whose
+  # unlinked target the room couldn't bind is still our attack, not a foreign
+  # one; one the room did bind lands on the creature.
+  describe 'unlinked creature targets' do
+    it 'files an unbound eruption as ours with no target, not foreign' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      rec.record(:attack, attack_event(name: 'earthen_fury', target: {}, target_name: 'triton brawler', damage: 25))
+      rec.close
+      row = query('SELECT ours, target_kind FROM attacks').first
+      expect(row.values_at('ours', 'target_kind')).to eq([1, 'none'])
+    end
+
+    it 'files a bound eruption as ours on the creature' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      rec.record(:attack, attack_event(name: 'earthen_fury', target_id: 190_214_719, target_name: 'triton brawler', damage: 25))
+      rec.close
+      row = query('SELECT ours, target_kind FROM attacks').first
+      expect(row.values_at('ours', 'target_kind')).to eq([1, 'creature'])
+    end
+  end
+
   describe 'kill credit' do
     it "is 'window' when the room-feed death lands inside the attack window" do
       rec = new_recorder
