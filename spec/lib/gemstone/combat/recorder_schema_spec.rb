@@ -235,6 +235,31 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(row['kill_credit']).to eq('last_own_attack')
     end
 
+    it "counts our damage-less reactive flare on an inbound attack as ours ('last_own_attack')" do
+      rec = new_recorder(idle_timeout: 60)
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      thorns = { name: :thorns, damaging: true, target_info: { id: 101, name: 'a cave lizard' }, hits: [{ damage: 0, crit: nil }] }
+      rec.record(:attack, attack_event(name: 'claw', target: nil, inbound: true, damage: 0,
+                                       attacker: { id: 101, name: 'a cave lizard' }, flares: [thorns]))
+      rec.finish_session(at: Time.at(1_000_100))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      expect(row['killed_by_attack_id']).to eq(query("SELECT id FROM attacks WHERE name = 'claw'").first['id'])
+      expect(row['kill_credit']).to eq('last_own_attack')
+    end
+
+    it "keeps a nearby player's damage-less flare someone else's ('last_attack')" do
+      rec = new_recorder(idle_timeout: 60)
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      acid = { name: :acid, damaging: true, attacker: 'Somebody', target_info: { id: 101, name: 'a cave lizard' }, hits: [{ damage: 0, crit: nil }] }
+      rec.record(:attack, attack_event(name: 'theirs', foreign_caster: true, damage: 0, flares: [acid]))
+      rec.finish_session(at: Time.at(1_000_100))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      expect(query('SELECT kill_credit FROM creatures').first['kill_credit']).to eq('last_attack')
+    end
+
     it "says 'last_attack' when the last damage-less attack was someone else's" do
       rec = new_recorder(idle_timeout: 60)
       rec.record(:attack, attack_event(name: 'mine', damage: 0))

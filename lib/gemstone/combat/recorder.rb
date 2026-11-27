@@ -1060,12 +1060,19 @@ module Lich
                   # arrives with no message): credit the last attack that
                   # touched the creature in any way - a hit of any size, the
                   # attack's own target, or a status it applied (#2415).
-                  last = @db.get_first_row(<<~SQL, [@session_id, creature_row, creature_row, creature_row])
-                    SELECT a.id, a.ours FROM attacks a
+                  # Ours as in the damaging fallback: our own row, or our
+                  # reactive flare (thorns, a shield spike) on this creature
+                  # riding an inbound row. The subqueries carry session_id so
+                  # they use the (session_id, creature_id) indexes; creature
+                  # rows are per session, so it changes no match.
+                  last = @db.get_first_row(<<~SQL, [creature_row, @session_id, creature_row, @session_id, creature_row, @session_id, creature_row])
+                    SELECT a.id, (a.ours = 1 OR EXISTS (SELECT 1 FROM flares f
+                                                        WHERE f.attack_id = a.id AND f.ours = 1 AND f.creature_id = ?))
+                    FROM attacks a
                     WHERE a.session_id = ? AND a.unowned = 0
                       AND (a.creature_id = ?
-                           OR a.id IN (SELECT attack_id FROM hits WHERE creature_id = ?)
-                           OR a.id IN (SELECT attack_id FROM statuses WHERE creature_id = ? AND attack_id IS NOT NULL))
+                           OR a.id IN (SELECT attack_id FROM hits WHERE session_id = ? AND creature_id = ?)
+                           OR a.id IN (SELECT attack_id FROM statuses WHERE session_id = ? AND creature_id = ? AND attack_id IS NOT NULL))
                     ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, a.id DESC LIMIT 1
                   SQL
                   if last
