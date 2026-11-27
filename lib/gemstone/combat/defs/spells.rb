@@ -145,6 +145,10 @@ module Lich
             AttackDef.new(:spiritual_malady, [
               /A spiritual malady wracks (?<target>.+?) causing \d+ points? of damage!/
             ].freeze),
+            # bard fear AoE, our own cry: an SSR + "X looks at you in utter
+            # terror!" per creature follows (the third-person :fear_cry is in
+            # THIRD_PERSON_SPELL_ATTACKS; elanthia-online/lich-5#2498)
+            AttackDef.new(:fear_cry, [/You let loose an eerie, modulating cry!/].freeze),
           ].freeze
 
           # Spell initiations catalogued from the wiki Messaging sections

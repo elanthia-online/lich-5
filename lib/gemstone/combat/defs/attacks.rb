@@ -426,7 +426,7 @@ module Lich
               /(?<attacker>.+?) slashes relentlessly at (?<target>.+?) with /,
               /(?<attacker>.+?) raises #{MK_PRE}(?:his|her|its)#{MK_POST} fists overhead and flails violently at (?<target>[^!]+)!/,
               /(?<attacker>.+?) opens its stony jaws and tries to savage (?<target>.+?) with /,
-              /(?<attacker>.+?) rears up onto its ossified hind legs and kicks at (?<target>.+?) with /,
+              /(?<attacker>.+?) rears up onto #{MK_PRE}its#{MK_POST} ossified hind legs and kicks at (?<target>.+?) with /,
               # Mounted charge: the rider clause comes FIRST and carries its
               # own link to the mount, so the attacker capture must start at
               # the comma - otherwise "Urged on by the knight riding it"
@@ -451,7 +451,59 @@ module Lich
               # STUNNED indicator fires just before) and "drags you off into
               # the dank hold", a room move. Its SMR PRECEDES the line,
               # maneuver-style; the inbound held-roll exception claims it.
-              /(?<attacker>.+?) reaches outward, #{MK_PRE}(?:his|her|its)#{MK_POST} arm encircling (?<target>your) neck\./
+              /(?<attacker>.+?) reaches outward, #{MK_PRE}(?:his|her|its)#{MK_POST} arm encircling (?<target>your) neck\./,
+              # Round-9 inbound forms, mined from GS4 XML logs 2026-09..11
+              # (45 hunting sessions): each left its AS/CS roll, damage or
+              # outcome unbound (elanthia-online/lich-5#2498). Lines that
+              # only lead in to an attack the defs already know ("nods at
+              # you!", the dance-macabre preamble, the triton warden's
+              # vines) are deliberately NOT here: making them attacks would
+              # split one event in two. Nor is "Despite desperate windmilling
+              # ... topples toward you!": that is a crit rider of OUR attack
+              # (the SMR precedes it), not the creature attacking.
+              # The plain charge (the mounted form above starts at the rider
+              # clause and must stay first).
+              /(?<attacker>.+?) gallops into a deadly charge at (?<target>[^!]+)!/,
+              # kiramon myrmidon
+              /Surging forward powerfully, (?<attacker>.+?) slashes at (?<target>you|.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} bladed forelegs!/,
+              /Bringing #{MK_PRE}(?:his|her|its)#{MK_POST} forelegs together, (?<attacker>.+?) attempts to pincer (?<target>[^!]+)!/,
+              # kiramon stalker: the ambush forms carry the attacker after
+              # "Without warning," and must precede the plain forms
+              /Without warning, (?<attacker>.+?) glides from the shadows and skitters mercilessly forward to slash at (?<target>you|.+?) with /,
+              /Without warning, (?<attacker>.+?) glides from the shadows and aims a preternaturally swift bite at (?<target>[^!]+)!/,
+              /(?<attacker>.+?) skitters mercilessly forward to slash at (?<target>you|.+?) with /,
+              /(?<attacker>.+?) aims a preternaturally swift bite at (?<target>[^!]+)!/,
+              # skeletal warhorse / dreadsteed
+              /(?<attacker>.+?) stomps at (?<target>you|.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} foot!/,
+              /(?<attacker>.+?) slams #{MK_PRE}(?:his|her|its)#{MK_POST} head into (?<target>you|.+?)!/,
+              /(?<attacker>.+?) scrapes at the ground with a steel-shod hoof, sending off a coruscation of sparks as .+? glares at (?<target>you|.+?) with eyes like burning sulphur\./,
+              # triton warden (CS/TD follows)
+              /(?<attacker>.+?) places one hand on top of the other, crossing #{MK_PRE}(?:his|her|its)#{MK_POST} palms toward (?<target>[^!]+)!/,
+              # kiramon broodtender larvae: "You dodge the larvae's ravenous assault!"
+              /Several larvae squirming over the back of (?<attacker>.+?) leap toward (?<target>you|.+?), mandibles snapping\./,
+              # disfigured hive thrall
+              /(?<attacker>.+?) flails at (?<target>you|.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} tortured fists!/,
+              /Twisted desperation contorts (?<attacker>.+?)'s#{MK_POST} warped features as #{MK_PRE}(?:he|she|it)#{MK_POST} tries to grab at (?<target>[^!]+)!/,
+              /Misshapen limbs flail as (?<attacker>.+?) flings #{MK_PRE}(?:himself|herself|itself)#{MK_POST} at (?<target>[^!]+)!/,
+              /(?<attacker>.+?)'s#{MK_POST} eyes widen as #{MK_PRE}(?:he|she|it)#{MK_POST} topples forward, belching caustic bile at (?<target>[^!]+)!/,
+              # mist-wreathed banshee (the resonance clause is a prefix on the same line)
+              /(?<attacker>.+?) lifts #{MK_PRE}(?:his|her|its)#{MK_POST} voice in a terrible screech at (?<target>[^!]+)!/,
+              # triton psionicist (an evadable bolt)
+              /(?<attacker>.+?) levitates a jagged piece of rock at (?<target>[^!]+)!/,
+              # caster creatures whose CS/TD follows directly
+              /(?<attacker>.+?) points its hands at (?<target>[^!]+)!/,
+              /(?<attacker>.+?) waves a hand dismissively at (?<target>[^!]+)!/,
+              /(?<attacker>.+?) shouts out a single mystical syllable, thrusting #{MK_PRE}(?:his|her|its)#{MK_POST} ghostly hands at (?<target>[^!]+)!/,
+              # dwarven marauder crystal shard
+              /(?<attacker>.+?) pulls out a tiny shard of jet black crystal and hurls it at (?<target>[^!]+)!/,
+              # kiramon stalker unseen strike (the damage line follows)
+              /Catching (?<target>you) unaware, (?<attacker>.+?) carves into you with cruel and ruthless savagery!/,
+              # triton brawler overhead smash
+              /(?<attacker>.+?) raises #{MK_PRE}(?:his|her|its)#{MK_POST} hands high, laces them together and brings them crashing down towards? (?<target>[^!]+)!/,
+              # tatterdemalion ghast leap (the dodge names the ghast)
+              /(?<attacker>.+?) coils before leaping high into the air in a streak of fraying fabrics and rotting flesh\.  #{MK_PRE}(?:He|She|It)#{MK_POST} hurtles down toward (?<target>[^!]+)!/,
+              # kiramon strandweaver web shot (AS/DS follows)
+              /(?<attacker>.+?) twists grotesquely, aiming #{MK_PRE}(?:his|her|its)#{MK_POST} spinnerets at (?<target>you|.+?) before shooting a clot of thick webbing!/
             ].freeze),
             # ambush - "waylay" IS its own attack line (it names a target).
             # The bare "leaps from hiding" form is NOT here: it is a
@@ -530,6 +582,12 @@ module Lich
             # Thorn-grown bow recoil: sheathing it rips the embedded thorns
             # out of the wielder's hand (owner: "my weapon hurts me when I
             # put it away")
+            # Kresh Warrens boltstone apparatus: a trap, not a creature (an
+            # object link, no MonsterBold). "The lightning strikes you ..."
+            # and the damage line follow (elanthia-online/lich-5#2498).
+            AttackDef.new(:boltstone_trap, [
+              /As you move past (?:a|an|the) .+?, light builds within its depths before a scintillating bolt of electricity streaks toward you!/
+            ].freeze),
             AttackDef.new(:thorn_recoil, [
               /As (?:a|an|your) .+? leaves your (?:left|right) hand, the thorns embedded in your skin painfully rip away/
             ].freeze),
@@ -599,7 +657,7 @@ module Lich
           #                    attacker 'self'
           # (owner 2026-09-07: "frigid wind is environmental, it's not self
           # inflicted" - the two must stay distinguishable in reports)
-          ENVIRONMENTAL = %i[frigid_wind].freeze
+          ENVIRONMENTAL = %i[frigid_wind boltstone_trap].freeze
           SELF_INFLICTED = %i[thorn_recoil].freeze
           ATTACKERLESS = (ENVIRONMENTAL + SELF_INFLICTED).freeze
 
