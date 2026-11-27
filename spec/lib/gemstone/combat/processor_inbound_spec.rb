@@ -1216,6 +1216,36 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(whip.map { |e| [e[:name], e[:inbound], e[:outcomes], e[:resolutions].map { |r| r[:result] }] }).to eq([[:natural, true, [:miss], [47]]])
     end
 
+    # elanthia-online/lich-5#2498: creature attacks on us whose wording no def
+    # knew left their roll, damage and outcome with nothing to attach to.
+    it 'attaches the roll and outcome to the round-9 inbound forms (kiramon stalker, myrmidon)' do
+      stalker = bolded(25999508, 'stalker', 'a sleek black kiramon stalker')
+      bite = described_class.parse_events([
+                                            "Without warning, #{stalker} glides from the shadows and aims a preternaturally swift bite at you!",
+                                            '  AS: +561 vs DS: +747 with AvD: +24 + d100 roll: +44 = -118',
+                                            '   A clean miss.'
+                                          ])
+      myrmidon = bolded(39990558, 'myrmidon', 'a chitinous kiramon myrmidon')
+      pincer = described_class.parse_events([
+                                              "Bringing #{bolded(39990558, 'myrmidon', 'its')} forelegs together, #{myrmidon} attempts to pincer you!",
+                                              '  AS: +609 vs DS: +394 with AvD: +12 + d100 roll: +65 = +292',
+                                              '   ... and hit for 14 points of damage!'
+                                            ])
+      expect(bite.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:outcomes], e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:natural, true, 25999508, [:miss], [-118]]])
+      expect(pincer.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:natural, true, 39990558, [292]]])
+    end
+
+    it 'attaches the boltstone trap\'s damage to an environmental inbound event' do
+      events = described_class.parse_events([
+                                              'As you move past a <a exist="26279035" noun="apparatus">glimmering boltstone apparatus</a>, light builds within its depths before a scintillating bolt of electricity streaks toward you!',
+                                              'The lightning strikes you in an agonizing eruption of liquid radiance!',
+                                              '   ... 5 points of damage!'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound], e[:attacker]] }).to eq([[:boltstone_trap, true, { name: 'environment' }]])
+    end
+
     it 'records the ooze shrapnel burst and the disciple rift as inbound room maneuvers with their rolls' do
       ooze = bolded(129583295, 'ooze', 'a quivering sanguine ooze')
       shrap = described_class.parse_events([

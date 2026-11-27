@@ -265,4 +265,80 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       end
     end
   end
+
+  # Round-9 inbound forms (elanthia-online/lich-5#2498). Each line is lifted
+  # from GS4 XML logs exactly as the game sent it; every one used to leave the
+  # AS/CS roll, damage or outcome that follows it with no event to attach to.
+  describe ".parse_attack round-9 inbound forms (#2498)" do
+    [
+      "Surging forward powerfully, <pushBold/>a <a exist=\"41138485\" noun=\"myrmidon\">chitinous kiramon myrmidon</a><popBold/> slashes at you with <pushBold/><a exist=\"41138485\" noun=\"myrmidon\">his</a><popBold/> bladed forelegs!",
+      "<pushBold/>A <a exist=\"129633263\" noun=\"dreadsteed\">smouldering skeletal dreadsteed</a><popBold/> gallops into a deadly charge at you!",
+      "Without warning, <pushBold/>a <a exist=\"24997331\" noun=\"stalker\">sleek black kiramon stalker</a><popBold/> glides from the shadows and skitters mercilessly forward to slash at you with a razor-sharp foreleg!",
+      "<pushBold/>A <a exist=\"368709649\" noun=\"warhorse\">skeletal warhorse</a><popBold/> stomps at you with its foot!",
+      "<pushBold/>A <a exist=\"129570615\" noun=\"dreadsteed\">smouldering skeletal dreadsteed</a><popBold/> rears up onto <pushBold/><a exist=\"129570615\" noun=\"dreadsteed\">its</a><popBold/> ossified hind legs and kicks at you with steel-shod hooves!",
+      "Bringing <pushBold/><a exist=\"39990558\" noun=\"myrmidon\">its</a><popBold/> forelegs together, <pushBold/>a <a exist=\"39990558\" noun=\"myrmidon\">chitinous kiramon myrmidon</a><popBold/> attempts to pincer you!",
+      "<pushBold/>A <a exist=\"211525185\" noun=\"warden\">triton warden</a><popBold/> places one hand on top of the other, crossing <pushBold/><a exist=\"211525185\" noun=\"warden\">his</a><popBold/> palms toward you!",
+      "<pushBold/>A <a exist=\"26221097\" noun=\"stalker\">grizzled kiramon stalker</a><popBold/> aims a preternaturally swift bite at you!",
+      "Without warning, <pushBold/>a <a exist=\"40724863\" noun=\"stalker\">sleek black kiramon stalker</a><popBold/> glides from the shadows and aims a preternaturally swift bite at you!",
+      "Several larvae squirming over the back of <pushBold/>a <a exist=\"40625111\" noun=\"broodtender\">bloated kiramon broodtender</a><popBold/> leap toward you, mandibles snapping.",
+      "<pushBold/>A <a exist=\"39945617\" noun=\"thrall\">disfigured hive thrall</a><popBold/> flails at you with <pushBold/><a exist=\"39945617\" noun=\"thrall\">his</a><popBold/> tortured fists!",
+      "<pushBold/>A <a exist=\"129762371\" noun=\"banshee\">flickering mist-wreathed banshee</a><popBold/> lifts <pushBold/><a exist=\"129762371\" noun=\"banshee\">her</a><popBold/> voice in a terrible screech at you!",
+      "<pushBold/>A <a exist=\"190099458\" noun=\"psionicist\">gleaming triton psionicist</a><popBold/> levitates a jagged piece of rock at you!",
+      "<pushBold/>A <a exist=\"130432872\" noun=\"banshee\">flickering mist-wreathed banshee's</a><popBold/> shrieking takes on a sepulchral resonance!  <pushBold/>A <a exist=\"130432872\" noun=\"banshee\">flickering mist-wreathed banshee</a><popBold/> lifts <pushBold/><a exist=\"130432872\" noun=\"banshee\">her</a><popBold/> voice in a terrible screech at you!",
+      "<pushBold/>A <a exist=\"26221097\" noun=\"stalker\">grizzled kiramon stalker</a><popBold/> skitters mercilessly forward to slash at you with a razor-sharp foreleg!",
+      "Twisted desperation contorts <pushBold/>a <a exist=\"39485159\" noun=\"thrall\">disfigured hive thrall's</a><popBold/> warped features as <pushBold/><a exist=\"39485159\" noun=\"thrall\">she</a><popBold/> tries to grab at you!",
+      "<pushBold/>A <a exist=\"129567870\" noun=\"dreadsteed\">smouldering skeletal dreadsteed</a><popBold/> scrapes at the ground with a steel-shod hoof, sending off a coruscation of sparks as <pushBold/><a exist=\"129567870\" noun=\"dreadsteed\">it</a><popBold/> glares at you with eyes like burning sulphur.  <pushBold/><a exist=\"129567870\" noun=\"dreadsteed\">It</a><popBold/> charges forward at a breakneck pace, leaving fiery hoofprints behind!",
+      "Misshapen limbs flail as <pushBold/>a <a exist=\"39886116\" noun=\"thrall\">disfigured hive thrall</a><popBold/> flings <pushBold/><a exist=\"39886116\" noun=\"thrall\">himself</a><popBold/> at you!",
+      "<pushBold/>A <a exist=\"368859587\" noun=\"pra'eda\">pra'eda</a><popBold/> points its hands at you!",
+      "<pushBold/>A <a exist=\"366962439\" noun=\"cleric\">shan cleric</a><popBold/> waves a hand dismissively at you!",
+      "<pushBold/>A <a exist=\"9764796\" noun=\"marauder\">dwarven marauder</a><popBold/> pulls out a tiny shard of jet black crystal and hurls it at you!",
+      "Catching you unaware, <pushBold/><a exist=\"18495497\" noun=\" stalker\">it</a><popBold/> carves into you with cruel and ruthless savagery!",
+      "<pushBold/>A <a exist=\"18372629\" noun=\"thrall\">disfigured hive thrall's</a><popBold/> eyes widen as <pushBold/><a exist=\"18372629\" noun=\"thrall\">she</a><popBold/> topples forward, belching caustic bile at you!",
+      "<pushBold/>A <a exist=\"151202451\" noun=\"brawler\">triton brawler</a><popBold/> raises <pushBold/><a exist=\"151202451\" noun=\"brawler\">his</a><popBold/> hands high, laces them together and brings them crashing down towards you!",
+      "<pushBold/>A <a exist=\"135091696\" noun=\"dreadsteed\">smouldering skeletal dreadsteed</a><popBold/> slams <pushBold/><a exist=\"135091696\" noun=\"dreadsteed\">its</a><popBold/> head into you!",
+      "<pushBold/>A <a exist=\"134766950\" noun=\"conjurer\">gaudy phantasmic conjurer</a><popBold/> shouts out a single mystical syllable, thrusting <pushBold/><a exist=\"134766950\" noun=\"conjurer\">her</a><popBold/> ghostly hands at you!",
+      "<pushBold/>A <a exist=\"134686168\" noun=\"ghast\">cadaverous tatterdemalion ghast</a><popBold/> coils before leaping high into the air in a streak of fraying fabrics and rotting flesh.  <pushBold/><a exist=\"134686168\" noun=\"ghast\">He</a><popBold/> hurtles down toward you with incredible force!",
+      "<pushBold/>A <a exist=\"41058070\" noun=\"strandweaver\">translucent kiramon strandweaver</a><popBold/> twists grotesquely, aiming <pushBold/><a exist=\"41058070\" noun=\"strandweaver\">her</a><popBold/> spinnerets at you before shooting a clot of thick webbing!",
+    ].each_with_index do |line, i|
+      it "recognizes round-9 inbound form #{i + 1} as an attack on us" do
+        result = described_class.parse_attack(line)
+        expect(result).not_to be_nil
+        expect(result[:inbound]).to be(true)
+        expect(result[:target]).to eq({})
+        expect(result[:attacker][:id]).to eq(line[/exist="(\d+)"/, 1].to_i)
+      end
+    end
+
+    it "files the same attack on a nearby player as a foreign target" do
+      line = "Surging forward powerfully, #{bolded(41138485, "myrmidon", "a chitinous kiramon myrmidon")} slashes at <a exist=\"-10000001\" noun=\"Adventurer\">Adventurer</a> with #{bolded(41138485, "myrmidon", "its")} bladed forelegs!"
+      result = described_class.parse_attack(line)
+      expect(result[:inbound]).to be_falsey
+      expect(result[:foreign_target]).to be(true)
+      expect(result[:attacker][:id]).to eq(41138485)
+    end
+
+    it "treats the boltstone apparatus as an environmental attack on us" do
+      result = described_class.parse_attack("As you move past a <a exist=\"26279035\" noun=\"apparatus\">glimmering boltstone apparatus</a>, light builds within its depths before a scintillating bolt of electricity streaks toward you!")
+      expect(result[:name]).to eq(:boltstone_trap)
+      expect(result[:inbound]).to be(true)
+      expect(result[:attacker]).to eq({ name: "environment" })
+    end
+
+    # Lead-ins: a known attack line sits between these and the roll, so they
+    # must not open an event of their own; nor may the topple,
+    # a crit rider of OUR attack (its SMR precedes it).
+    [
+      "Despite desperate windmilling to catch <pushBold/><a exist=\"127052240\" noun=\"grotesque\">its</a><popBold/> balance, <pushBold/>a <a exist=\"127052240\" noun=\"grotesque\">horned basalt grotesque</a><popBold/> topples toward you!  You leap to the side and avoid being flattened as <pushBold/>the <a exist=\"127052240\" noun=\"grotesque\">grotesque</a><popBold/> topples over with a thunderous crash!",
+      "In an awe-inspiring display of combat mastery, <pushBold/>a <a exist=\"148107057\" noun=\"protector\">spectral triton protector</a><popBold/> engages you in a furious dance macabre, spiraling into a blur of strikes and ripostes!",
+      "One of the vines surrounding <pushBold/>the <a exist=\"148536136\" noun=\"warden\">triton warden</a><popBold/> lashes out at you, driving a thorn into your skin!  You feel poison coursing through your veins.",
+      "<pushBold/>A <a exist=\"127072516\" noun=\"grotesque\">horned basalt grotesque</a><popBold/> twists a stony claw toward you!",
+      "<pushBold/>A <a exist=\"366962081\" noun=\"ranger\">shan ranger</a><popBold/> nods at you!",
+      "<pushBold/>A <a exist=\"368884496\" noun=\"mezic\">grizzled mezic</a><popBold/> waves at you!",
+      "<pushBold/>A <a exist=\"18519282\" noun=\"thrall\">disfigured hive thrall</a><popBold/> desperately thrusts a hand at you!",
+    ].each_with_index do |line, i|
+      it "leaves lead-in #{i + 1} alone" do
+        expect(described_class.parse_attack(line)).to be_nil
+      end
+    end
+  end
 end
