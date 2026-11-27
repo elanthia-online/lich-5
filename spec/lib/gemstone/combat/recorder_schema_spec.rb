@@ -185,6 +185,57 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  # elanthia-online/lich-5#2415: kills the character made that were filed as
+  # nobody's.
+  describe 'kill credit for bleed-outs and damage-less attacks' do
+    it 'credits our earlier attack, not the unowned bleed tick whose window the death fell in' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      rec.record(:attack, attack_event(name: 'hamstring', damage: 30))
+      rec.record(:attack, attack_event(name: 'bleed', unowned: true, damage: 4, at: Time.at(1_000_010)))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add') # inside the tick's window
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      hamstring = query("SELECT id FROM attacks WHERE name = 'hamstring'").first['id']
+      expect(row['killed_by_attack_id']).to eq(hamstring)
+      expect(row['kill_credit']).to eq('last_own_hit')
+    end
+
+    it 'keeps the tick as the credit when nothing else touched the creature' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
+      rec.record(:attack, attack_event(name: 'bleed', unowned: true, damage: 4))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      expect(row['killed_by_attack_id']).to eq(query("SELECT id FROM attacks WHERE name = 'bleed'").first['id'])
+      expect(row['kill_credit']).to eq('window')
+    end
+
+    it "credits our last damage-less attack on it and says 'last_own_attack'" do
+      rec = new_recorder(idle_timeout: 60)
+      rec.record(:attack, attack_event(name: 'tremors', damage: 0))
+      rec.finish_session(at: Time.at(1_000_100)) # no window
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      expect(row['killed_by_attack_id']).to eq(query("SELECT id FROM attacks WHERE name = 'tremors'").first['id'])
+      expect(row['kill_credit']).to eq('last_own_attack')
+    end
+
+    it "says 'last_attack' when the last damage-less attack was someone else's" do
+      rec = new_recorder(idle_timeout: 60)
+      rec.record(:attack, attack_event(name: 'mine', damage: 0))
+      rec.record(:attack, attack_event(name: 'theirs', foreign_caster: true, damage: 0))
+      rec.finish_session(at: Time.at(1_000_100))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      expect(row['killed_by_attack_id']).to eq(query("SELECT id FROM attacks WHERE name = 'theirs'").first['id'])
+      expect(row['kill_credit']).to eq('last_attack')
+    end
+  end
+
   describe 'stun pair' do
     it 'merges the crit-table stun and the messaging status into one row, either order' do
       rec = new_recorder
