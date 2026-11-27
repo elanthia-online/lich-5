@@ -212,6 +212,18 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(row['kill_credit']).to eq('window')
     end
 
+    it "keeps crediting the tick ('last_hit') with no window when only a tick ever touched it" do
+      rec = new_recorder(idle_timeout: 60)
+      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000)) # a tick alone opens no session
+      rec.record(:attack, attack_event(name: 'bleed', unowned: true, damage: 4))
+      rec.finish_session(at: Time.at(1_000_100)) # no window
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+      rec.close
+      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+      expect(row['killed_by_attack_id']).to eq(query("SELECT id FROM attacks WHERE name = 'bleed'").first['id'])
+      expect(row['kill_credit']).to eq('last_hit')
+    end
+
     it "credits our last damage-less attack on it and says 'last_own_attack'" do
       rec = new_recorder(idle_timeout: 60)
       rec.record(:attack, attack_event(name: 'tremors', damage: 0))

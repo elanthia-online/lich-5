@@ -1074,6 +1074,20 @@ module Lich
                   elsif window_tick
                     credit_id = window_tick
                     credit = 'window'
+                  else
+                    # Only unowned ticks ever touched it: credit the last
+                    # damaging one, as before this rule existed.
+                    last = @db.get_first_row(<<~SQL, [creature_row, @session_id])
+                      SELECT a.id, (a.ours = 1 OR COALESCE(f.ours, 0) = 1) FROM hits h
+                      JOIN attacks a ON a.id = h.attack_id
+                      LEFT JOIN flares f ON f.id = h.flare_id
+                      WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
+                      ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
+                    SQL
+                    if last
+                      credit_id = last[0]
+                      credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
+                    end
                   end
                 end
               end
