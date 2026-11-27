@@ -33,8 +33,11 @@ RSpec.describe 'unlinked creature targets' do
   end
 
   describe Lich::Gemstone::Combat::Processor do
+    # crtr_flag?(:dead) is the server's death flag, which the lookup reads.
+    # dead? (Lich's HP model) stays false: a GS corpse keeps nonzero health.
     let(:brawler) do
-      Struct.new(:id, :noun, :name) do
+      Struct.new(:id, :noun, :name, :flag_dead) do
+        def crtr_flag?(flag) = flag == :dead && flag_dead == true
         def dead? = false
       end
     end
@@ -78,6 +81,31 @@ RSpec.describe 'unlinked creature targets' do
       expect(events.first[:name]).to eq(:earthen_fury)
       expect(events.first[:target][:id]).to be_nil
       expect(events.first[:foreign_target]).to be_nil
+    end
+
+    it 'skips a same-named corpse from an earlier kill and binds the live creature' do
+      room(brawler.new(1, 'brawler', 'triton brawler', true), brawler.new(2, 'brawler', 'triton brawler'))
+      expect(described_class.parse_events(chunk).first[:target][:id]).to eq(2)
+    end
+
+    it 'still skips the corpse when the room listing repeats its dead flag in this chunk' do
+      room(brawler.new(1, 'brawler', 'triton brawler', true), brawler.new(2, 'brawler', 'triton brawler'))
+      listing = %(<component id='room objs'>  You also see<crtrStatus exist="1" health="177" maxhealth="300" hostile="1" dead="1"/><b> #{bolded(1, 'brawler', 'a triton brawler')}</b> that appears dead.</component>)
+      expect(described_class.parse_events([listing] + chunk).first[:target][:id]).to eq(2)
+    end
+
+    it 'keeps the creature this chunk killed as a candidate, so it never binds to a live namesake' do
+      # this chunk's eruption kills brawler 1: its crtrStatus arrives in the
+      # chunk and was applied before processing, so it is already flagged dead
+      room(brawler.new(1, 'brawler', 'triton brawler', true), brawler.new(2, 'brawler', 'triton brawler'))
+      killed = chunk + ['<crtrStatus exist="1" health="-12" maxhealth="300" hostile="1" dead="1"/>']
+      expect(described_class.parse_events(killed).first[:target][:id]).not_to eq(2)
+    end
+
+    it 'binds the chunk\'s victim when it is the only one with that name' do
+      room(brawler.new(1, 'brawler', 'triton brawler', true))
+      killed = chunk + ['<crtrStatus exist="1" health="-12" maxhealth="300" hostile="1" dead="1"/>']
+      expect(described_class.parse_events(killed).first[:target][:id]).to eq(1)
     end
 
     it 'adopts a later link to a creature with the same name' do

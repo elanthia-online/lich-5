@@ -364,6 +364,9 @@ module Lich
           # Position recoveries are per chunk: a stand-up here must not
           # suppress a knockdown crit in the NEXT chunk.
           @position_recovered = nil
+          # Creatures whose death THIS chunk reports, for the unlinked-target
+          # lookup (see resolve_unlinked_target).
+          @chunk_killed_ids = chunk_killed_ids(lines)
           events = []
           # Identity-guarded push: an event RESUMED after an inbound
           # interruption (see interrupted_own) was already saved once.
@@ -2353,16 +2356,23 @@ module Lich
         end
 
         # The room's creature an unlinked target name refers to, when exactly
-        # one alive creature in the room carries that name; nil otherwise
+        # one candidate in the room carries that name; nil otherwise
         # (same-named creatures stay unbound rather than guess).
+        #
+        # A GS corpse stays in the room with its name and nonzero health, so
+        # an earlier kill must not count. But this chunk's own victim is
+        # already flagged dead when the chunk is processed (its crtrStatus
+        # update was applied first), so a creature whose death this chunk
+        # reports stays a candidate.
         #
         # @param name [String, nil] the printed name, article removed
         # @return [Hash, nil] {id:, noun:, name:}
         def resolve_unlinked_target(name)
           return nil if name.nil? || !defined?(Creature) || !Creature.respond_to?(:in_room)
 
+          killed_here = @chunk_killed_ids || []
           matches = Creature.in_room.select do |c|
-            c.name.to_s.casecmp?(name) && !(c.respond_to?(:dead?) && c.dead?)
+            c.name.to_s.casecmp?(name) && (!creature_dead?(c) || killed_here.include?(c.id.to_i))
           end
           return nil unless matches.size == 1
 
@@ -2370,6 +2380,21 @@ module Lich
           { id: creature.id.to_i, noun: creature.noun, name: creature.name }
         rescue StandardError
           nil
+        end
+
+        # Ids of creatures whose death this chunk reports: a <crtrStatus
+        # dead="1"> outside the room-object listing, which repeats the flag
+        # for every corpse lying in the room.
+        #
+        # @param lines [Array<String>] the chunk
+        # @return [Array<Integer>]
+        def chunk_killed_ids(lines)
+          lines.flat_map do |line|
+            next [] unless line.include?('dead="1"')
+
+            line.gsub(%r{<component id=['"]room objs['"]>.*?</component>}m, '')
+                .scan(/<crtrStatus exist="(\d+)"[^>]*\bdead="1"/).flatten.map(&:to_i)
+          end.uniq
         end
 
         # Apply status effect directly to a creature (outside combat events)

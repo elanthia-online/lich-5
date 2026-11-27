@@ -124,8 +124,8 @@ module Lich
                   # a third party. Filing it foreign kept the whole spell off
                   # the caster's ledger (#2415). Keep the printed name so the
                   # processor can bind it to the room's creature.
-                  if (name = unlinked_creature_name(match[:target]))
-                    result[:target_name] = name
+                  if (creature_name = unlinked_creature_name(match[:target]))
+                    result[:target_name] = creature_name
                   else
                     result[:foreign_target] = true
                   end
