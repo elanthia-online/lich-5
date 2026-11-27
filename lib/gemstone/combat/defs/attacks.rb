@@ -579,15 +579,15 @@ module Lich
               # capture is a bare name, never a creature link)
               /(?<target>.+?) shivers as the cold settles into #{MK_PRE}(?:his|her|its)#{MK_POST} flesh\./
             ].freeze),
-            # Thorn-grown bow recoil: sheathing it rips the embedded thorns
-            # out of the wielder's hand (owner: "my weapon hurts me when I
-            # put it away")
             # Kresh Warrens boltstone apparatus: a trap, not a creature (an
             # object link, no MonsterBold). "The lightning strikes you ..."
             # and the damage line follow (elanthia-online/lich-5#2498).
             AttackDef.new(:boltstone_trap, [
               /As you move past (?:a|an|the) .+?, light builds within its depths before a scintillating bolt of electricity streaks toward you!/
             ].freeze),
+            # Thorn-grown bow recoil: sheathing it rips the embedded thorns
+            # out of the wielder's hand (owner: "my weapon hurts me when I
+            # put it away")
             AttackDef.new(:thorn_recoil, [
               /As (?:a|an|your) .+? leaves your (?:left|right) hand, the thorns embedded in your skin painfully rip away/
             ].freeze),

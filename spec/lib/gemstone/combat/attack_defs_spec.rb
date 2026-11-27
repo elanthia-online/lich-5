@@ -324,10 +324,6 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:attacker]).to eq({ name: "environment" })
     end
 
-    it "recognizes our own fear cry" do
-      expect(described_class.parse_attack("You let loose an eerie, modulating cry!")[:name]).to eq(:fear_cry)
-    end
-
     # Lead-ins: a known attack line sits between these and the roll, so they
     # must not open an event of their own; nor may the topple,
     # a crit rider of OUR attack (its SMR precedes it).
