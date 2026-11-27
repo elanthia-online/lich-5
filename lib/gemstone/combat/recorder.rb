@@ -121,7 +121,7 @@ module Lich
             last_seen   REAL,
             killed_at   REAL,
             killed_by_attack_id INTEGER,
-            kill_credit TEXT,                             -- how killed_by_attack_id was chosen: 'crit' (fatal crit, ground truth) | 'window' (room-feed death inside an attack window) | 'last_own_hit' (no window: the last damaging attack on it was ours) | 'last_hit' (no window: the last damaging attack on it was someone else's) | NULL (unknown / pre-migration)
+            kill_credit TEXT,                             -- how killed_by_attack_id was chosen: 'crit' (fatal crit, ground truth) | 'window' (room-feed death inside an attack window) | 'last_own_hit' (no window, or only an unowned tick's: the last damaging attack on it was ours) | 'last_hit' (same, someone else's) | 'last_own_attack' (no damaging attack at all: the last attack that touched it was ours) | 'last_attack' (same, someone else's) | NULL (unknown / pre-migration)
             UNIQUE (session_id, exist_id)
           );
 
@@ -1020,6 +1020,16 @@ module Lich
             if status == 'dead' && action == 'add' && creature_row
               credit_id = attack_id
               credit = attack_id ? 'window' : nil
+              window_tick = nil
+              # A death inside an UNOWNED effect tick's window (a creature
+              # bleeding out from our hamstring) would credit the tick, which
+              # is nobody's ability, so the kill counted for no one (#2415).
+              # Credit it as if there were no window; the tick stays the
+              # credit only if nothing else touched the creature.
+              if credit_id && @db.get_first_value('SELECT unowned FROM attacks WHERE id = ?', [credit_id]).to_i == 1
+                window_tick = credit_id
+                credit_id = credit = nil
+              end
               if credit_id.nil?
                 # No window and no event link (the death message lagged past
                 # the swing): credit the LAST damaging attack on it from ANY
@@ -1031,7 +1041,7 @@ module Lich
                   SELECT a.id, (a.ours = 1 OR COALESCE(f.ours, 0) = 1) FROM hits h
                   JOIN attacks a ON a.id = h.attack_id
                   LEFT JOIN flares f ON f.id = h.flare_id
-                  WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
+                  WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0 AND a.unowned = 0
                   ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
                 SQL
                 # ordering: the chunk's time, then which chunk (prompt times
@@ -1044,6 +1054,48 @@ module Lich
                 if last
                   credit_id = last[0]
                   credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
+                else
+                  # No damaging hit at all (area spells such as tremors or a
+                  # cold snap record our attack with no damage, and the death
+                  # arrives with no message): credit the last attack that
+                  # touched the creature in any way - a hit of any size, the
+                  # attack's own target, or a status it applied (#2415).
+                  # Ours as in the damaging fallback: our own row, or our
+                  # reactive flare (thorns, a shield spike) on this creature
+                  # riding an inbound row. The subqueries carry session_id so
+                  # they use the (session_id, creature_id) indexes; creature
+                  # rows are per session, so it changes no match.
+                  last = @db.get_first_row(<<~SQL, [creature_row, @session_id, creature_row, @session_id, creature_row, @session_id, creature_row])
+                    SELECT a.id, (a.ours = 1 OR EXISTS (SELECT 1 FROM flares f
+                                                        WHERE f.attack_id = a.id AND f.ours = 1 AND f.creature_id = ?))
+                    FROM attacks a
+                    WHERE a.session_id = ? AND a.unowned = 0
+                      AND (a.creature_id = ?
+                           OR a.id IN (SELECT attack_id FROM hits WHERE session_id = ? AND creature_id = ?)
+                           OR a.id IN (SELECT attack_id FROM statuses WHERE session_id = ? AND creature_id = ? AND attack_id IS NOT NULL))
+                    ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, a.id DESC LIMIT 1
+                  SQL
+                  if last
+                    credit_id = last[0]
+                    credit = last[1] == 1 ? 'last_own_attack' : 'last_attack'
+                  elsif window_tick
+                    credit_id = window_tick
+                    credit = 'window'
+                  else
+                    # Only unowned ticks ever touched it: credit the last
+                    # damaging one, as before this rule existed.
+                    last = @db.get_first_row(<<~SQL, [creature_row, @session_id])
+                      SELECT a.id, (a.ours = 1 OR COALESCE(f.ours, 0) = 1) FROM hits h
+                      JOIN attacks a ON a.id = h.attack_id
+                      LEFT JOIN flares f ON f.id = h.flare_id
+                      WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
+                      ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
+                    SQL
+                    if last
+                      credit_id = last[0]
+                      credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
+                    end
+                  end
                 end
               end
               @db.execute(<<~SQL, [at, credit_id, credit, creature_row])
