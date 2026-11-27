@@ -49,6 +49,16 @@ module Lich
         # roll is ours; every other assault rolls after its round line.
         ROLL_BEFORE_ROUND_ASSAULTS = %i[barrage].freeze
 
+        # Untargeted room AoEs that roll once PER creature, each roll printed
+        # BEFORE the line naming that creature (the bard fear cry: SSR, then
+        # "X looks at <you|bard> in utter terror!", per creature). The cry
+        # does no damage, so nothing settles its attack-born event, and a
+        # per-creature line need not be a status ("X is unaffected!", "X
+        # casts about wildly, too panicked to act!"). For these, an event
+        # that has bound its creature is settled: the next roll belongs to
+        # the next creature.
+        ROLL_BEFORE_TARGET_AOE = %i[fear_cry].freeze
+
         UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady poison_tick].freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
@@ -1048,6 +1058,8 @@ module Lich
                     # and the second bystander recorded no roll at all
                     # (Rysk logs 2026-09-11, fixture eviscerate.txt).
                     settled = current_event[:hits].any? ||
+                              (ROLL_BEFORE_TARGET_AOE.include?(current_event[:name]) &&
+                               current_event[:target] && current_event[:target][:id]) ||
                               (!born && (current_event[:outcomes].any? ||
                                          current_event[:_had_status]))
                     sink = current_event unless settled
