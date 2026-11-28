@@ -51,6 +51,15 @@ module Lich
 
         UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady poison_tick].freeze
 
+        # Spells that keep striking after the cast, in rounds that name no
+        # caster and arrive in later chunks, so whose spell it is has to be
+        # remembered from its opening (see spell_opened / running_spells).
+        # The value is how many seconds an opening stays its caster's: the
+        # spell's own rounds plus 2 for a late chunk.
+        #   earthen_fury: erupts at the cast and every 2 seconds for the next
+        #     10 (six cycles), on the one creature its opening line links.
+        RUNNING_SPELL_SECONDS = { earthen_fury: 12 }.freeze
+
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the
         # crit) - applying both doubled the tick (hunt log 2026-09-07 23:20).
@@ -367,6 +376,15 @@ module Lich
           # Creatures whose death THIS chunk reports, for the unlinked-target
           # lookup (see resolve_unlinked_target).
           @chunk_killed_ids = chunk_killed_ids(lines)
+          # Running spells: drop those on creatures an EARLIER chunk killed
+          # (this chunk's victim still needs its entry), and note this
+          # chunk's time for their freshness.
+          @running_spells ||= {}
+          (@spell_victims_dead || []).each { |id| @running_spells.delete_if { |(_, key), _| key == id } }
+          @spell_victims_dead = @chunk_killed_ids
+          chunk_at = (lines.reverse_each.lazy.filter_map { |l| l[PROMPT_TIME_PATTERN, 1] }.first || Time.now).to_f
+          # Whose gesture came last in this chunk: :self, a player's name, nil.
+          last_caster = nil
           events = []
           # Identity-guarded push: an event RESUMED after an inbound
           # interruption (see interrupted_own) was already saved once.
@@ -842,6 +860,11 @@ module Lich
               # only roll + dodge line; hunt log 2026-09-07: two such arrows
               # recorded as :unknown outside the volley tree).
               active_sequence = seq
+              # Earthen Fury's opening links its victim and follows its
+              # caster's gesture.
+              if seq == :earthen_fury && line_target && line_target[:id]
+                spell_opened(:earthen_fury, line_target[:id], last_caster, chunk_at, line_target)
+              end
               if spawn_pending
                 active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
                 spawn_pending = nil
@@ -849,6 +872,7 @@ module Lich
               end
             elsif (seq_end = Parser.parse_sequence_end(line))
               active_sequence = nil if active_sequence == seq_end
+              @running_spells.delete([:earthen_fury, line_target[:id]]) if seq_end == :earthen_fury && line_target
               if active_spawn && seq_end == active_spawn[:sequence]
                 respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
                 active_spawn = nil
@@ -914,6 +938,8 @@ module Lich
                   target: line_target,
                   weapon: current_event && current_event[:weapon],
                   parent: current_event && current_event[:parent],
+                  # The same attack on another target is as much nobody's.
+                  unowned: current_event && current_event[:unowned],
                   # Same attack, another AoE target: it sits at the SAME point
                   # in the spawn tree as the event it split from, so it carries
                   # the same lineage. root_ref resolves to a real event below.
@@ -947,9 +973,11 @@ module Lich
                 respond "[Combat] Switched to target: #{line_target[:name]} (#{line_target[:id]})" if Tracker.debug?(:verbose)
 
               elsif current_target.nil? && current_event[:target_name] &&
-                    !current_event[:target_name].casecmp?(line_target[:name].to_s)
+                    !names_same_creature?(current_event[:target_name], line_target[:name])
                 # An unlinked target name the room couldn't resolve: a line
-                # naming a DIFFERENT creature is not this event's victim.
+                # naming a DIFFERENT creature is not this event's victim. A
+                # crit line's short name ("the giant warg's right foot" for a
+                # niveous giant warg) still names the same one.
                 respond "[Combat] Kept #{current_event[:target_name]} unbound, not #{line_target[:name]}" if Tracker.debug?(:verbose)
               elsif current_target.nil?
                 # First target for current event - just set it, don't discard
@@ -1313,6 +1341,14 @@ module Lich
               foreign_latch = attack[:attacker][:name] if attack[:foreign_caster] && attack[:attacker]
               eff_foreign = attack[:foreign_caster] ||
                             (foreign_latch && attack[:attacker].nil? && !our_2p) || nil
+              last_caster = :self if our_2p
+              last_caster = attack[:attacker][:name] if attack[:foreign_caster] && attack[:attacker]
+              # A round of a running spell names no caster: it is whose opening
+              # of the spell we saw, which overrides the chunk latch either
+              # way. With no opening on record it is nobody's (a spell already
+              # running when we walked in).
+              running = (fury_owner(attack[:target_name], chunk_at) if attack[:name] == :earthen_fury && attack[:target_name])
+              eff_foreign = (running[:owner] != :self && !running[:owner].nil?) || nil if running
 
               current_event = {
                 source: superseded_cast ? superseded_source : source,
@@ -1320,7 +1356,7 @@ module Lich
                 # An unlinked creature name (Earthen Fury's eruption lines)
                 # binds to the room's creature when exactly one alive creature
                 # carries that name (#2415).
-                target: (attack[:target] && !attack[:target].empty? ? attack[:target] : resolve_unlinked_target(attack[:target_name])) || {},
+                target: (attack[:target] && !attack[:target].empty? ? attack[:target] : ((running && running[:target]) || resolve_unlinked_target(attack[:target_name]))) || {},
                 # Still unbound: only a creature with this name may be adopted
                 # later in the chunk, never whichever creature is named next.
                 target_name: attack[:target_name],
@@ -1353,7 +1389,8 @@ module Lich
                 # is excluded by the owning-cast check below (which set :self
                 # for it) plus the 2p-line guard. Keyed by THIS tick's victim,
                 # so our cast on another creature can't claim it.
-                unowned: (UNOWNED_TICK_ATTACKS.include?(attack[:name]) &&
+                unowned: (running && running[:owner].nil?) ||
+                         (UNOWNED_TICK_ATTACKS.include?(attack[:name]) &&
                           attack[:attacker].nil? && !eff_foreign &&
                           !line.match?(/\AYou\b/) &&
                           cast_owner[cast_owner_key.call(attack[:name], attack[:target])] != :self) || nil,
@@ -2353,6 +2390,64 @@ module Lich
                           tier: ucs_result[:tier])
         rescue => e
           respond "[Combat] Error applying UCS: #{e.message}" if Tracker.debug?(:verbose)
+        end
+
+        # A running spell opened: remember whose it is.
+        #
+        # @param name [Symbol] the spell, a key of RUNNING_SPELL_SECONDS
+        # @param key [Integer, Symbol, String] what tells one running spell of
+        #   that name from another: the victim's id, or the caster
+        # @param owner [Symbol, String, nil] :self, a player's name, or nil
+        #   when the opening followed nobody's gesture
+        # @param at [Float] the chunk's time
+        # @param target [Hash, nil] the creature the opening line links
+        # @return [void]
+        def spell_opened(name, key, owner, at, target = nil)
+          @running_spells[[name, key]] = { owner: owner, target: target, at: at }
+        end
+
+        # The spells of that name still running at `at`.
+        #
+        # @param name [Symbol]
+        # @param at [Float] the chunk's time
+        # @return [Array<Hash>] {owner:, target:, at:}
+        def running_spells(name, at)
+          @running_spells.delete_if { |(spell, _), s| at - s[:at] > RUNNING_SPELL_SECONDS.fetch(spell) }
+          @running_spells.select { |(spell, _), _| spell == name }.values
+        end
+
+        # Whose Earthen Fury an eruption on the creature printed as `name`
+        # is, and which creature, from the openings still running.
+        #
+        # @param name [String] the printed creature name, article removed
+        # @param at [Float] the chunk's time
+        # @return [Hash] {owner: :self | String | nil, target: Hash | nil}
+        def fury_owner(name, at)
+          live = running_spells(:earthen_fury, at).select { |s| s[:target][:name].to_s.casecmp?(name) }
+          return { owner: nil, target: nil } if live.empty?
+
+          found = live.first if live.size == 1
+          if found.nil? && (bound = resolve_unlinked_target(name))
+            found = @running_spells[[:earthen_fury, bound[:id]]]
+          end
+          return { owner: found[:owner], target: found[:target] } if found
+
+          owners = live.map { |s| s[:owner] }.uniq
+          { owner: owners.size == 1 ? owners.first : nil, target: nil }
+        end
+
+        # Whether a link's name can be the creature an unlinked target name
+        # printed: the same name, or its tail (crit lines link a short name,
+        # "giant warg" for "niveous giant warg").
+        #
+        # @param printed [String] the unlinked name, article removed
+        # @param linked [String, nil] the link's name
+        # @return [Boolean]
+        def names_same_creature?(printed, linked)
+          linked = linked.to_s.strip
+          return false if linked.empty?
+
+          printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
         end
 
         # The room's creature an unlinked target name refers to, when exactly

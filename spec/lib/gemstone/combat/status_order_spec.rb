@@ -51,7 +51,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       define_singleton_method(:all) { [subject_creature] }
     end
     stub_const('Lich::Gemstone::Combat::Creature', registry)
-    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead].each do |iv|
       described_class.instance_variable_set(iv, nil)
     end
   end

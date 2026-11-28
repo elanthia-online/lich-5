@@ -51,7 +51,7 @@ RSpec.describe 'unlinked creature targets' do
       stub_const('Lich::Common::Events', Module.new)
       allow(Lich::Common::Events).to receive(:emit)
       allow(Lich::Common::Events).to receive(:any_for?).with('combat.attack').and_return(false)
-      %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits].each do |iv|
+      %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead].each do |iv|
         described_class.instance_variable_set(iv, nil)
       end
     end
@@ -112,6 +112,14 @@ RSpec.describe 'unlinked creature targets' do
       room(brawler.new(1, 'brawler', 'triton brawler'), brawler.new(2, 'brawler', 'triton brawler'))
       events = described_class.parse_events(chunk + ["   The #{bolded(2, 'brawler', 'triton brawler')} is knocked to the ground!"])
       expect(events.first[:target][:id]).to eq(2)
+    end
+
+    it "adopts a crit line's short-name link to the same creature (real lines)" do
+      room(brawler.new(1, 'warg', 'niveous giant warg'), brawler.new(2, 'warg', 'niveous giant warg'))
+      warg_chunk = ['Craggy debris explodes from the ground beneath a niveous giant warg!',
+                    '[SMR result: 195 (Open d100: 87, Bonus: 57)]', '   ... 35 points of damage!',
+                    %(   Massive blow removes <pushBold/>the <a exist="2" noun="warg">giant warg</a><popBold/>'s right foot!)]
+      expect(described_class.parse_events(warg_chunk).first[:target][:id]).to eq(2)
     end
   end
 end
