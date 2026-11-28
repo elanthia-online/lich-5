@@ -36,6 +36,12 @@ module Lich
             SequenceDef.new(:sandstorm, [
               /Sand bursts from the ground at your feet, spiraling up on a rising wind as it builds into a shrieking cyclone that engulfs the area!/
             ].freeze, [/The sandstorm blows itself out, and the last of the windblown sand settles to the ground\./].freeze),
+            # Meteor Swarm (525): the caster's own opening, then meteor cycles
+            # every 3 seconds, each hitting some creatures (see :meteor_swarm
+            # in spells.rb), until the meteors cease (GS4 logs 2026-11-28).
+            SequenceDef.new(:meteor_swarm, [
+              /Celestial sigils scintillate in the air around you as you gesture heavenward, reaching into the blackness beyond the skies\./
+            ].freeze, [/Terrible silence blankets the area as the meteors cease to fall\./].freeze),
             SequenceDef.new(:mstrike, [
               /With great haste, you let loose a volley of shots!/,
               /With instinctive motions, you weave to and fro striking with deliberate and unrelenting fury!/,

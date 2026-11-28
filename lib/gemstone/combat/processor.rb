@@ -62,10 +62,16 @@ module Lich
         #     later, while the caster stays in the room; it lingers 10 seconds,
         #     up to 20 with Elemental Lore - Fire (GS4 release notes, 2026-11),
         #     and the closing line ends it sooner. Keyed by caster.
+        #   meteor_swarm: cycles every 3 seconds from 3 seconds after the
+        #     cast, 2 to 10 of them (GS4 release notes, 2026-11), so up to 30
+        #     seconds; the closing line ends it sooner. Keyed by caster.
         # Every running spell is forgotten when we change rooms: none of our
         # spells strikes a room we have left, and whatever strikes the new
         # room is not ours.
-        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 22 }.freeze
+        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 22, meteor_swarm: 32 }.freeze
+
+        # Running spells that fill the room, keyed by caster (see caster_owner).
+        ROOM_SPELLS = %i[sandstorm meteor_swarm].freeze
 
         # The room a <nav> line moves us to.
         NAV_ROOM_PATTERN = /<nav rm=['"](\d+)['"]/.freeze
@@ -880,9 +886,10 @@ module Lich
               if seq == :earthen_fury && line_target && line_target[:id]
                 spell_opened(:earthen_fury, line_target[:id], last_caster, chunk_at, line_target)
               end
-              # Sandstorm's only known opening is the caster's own ("at your
-              # feet"), and the storm fills the room, so it is keyed by caster.
-              spell_opened(:sandstorm, :self, :self, chunk_at) if seq == :sandstorm
+              # Sandstorm's and Meteor Swarm's only known openings are the
+              # caster's own ("at your feet", "around you"), and both fill the
+              # room, so they are keyed by caster.
+              spell_opened(seq, :self, :self, chunk_at) if ROOM_SPELLS.include?(seq)
               if spawn_pending
                 active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
                 spawn_pending = nil
@@ -891,7 +898,7 @@ module Lich
             elsif (seq_end = Parser.parse_sequence_end(line))
               active_sequence = nil if active_sequence == seq_end
               @running_spells.delete([:earthen_fury, line_target[:id]]) if seq_end == :earthen_fury && line_target
-              @running_spells.delete_if { |(spell, _), _| spell == :sandstorm } if seq_end == :sandstorm
+              @running_spells.delete_if { |(spell, _), _| spell == seq_end } if ROOM_SPELLS.include?(seq_end)
               if active_spawn && seq_end == active_spawn[:sequence]
                 respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
                 active_spawn = nil
@@ -1368,8 +1375,8 @@ module Lich
               # running when we walked in).
               running = if attack[:name] == :earthen_fury && attack[:target_name]
                           fury_owner(attack[:target_name], chunk_at)
-                        elsif attack[:name] == :sandstorm
-                          storm_owner(chunk_at)
+                        elsif ROOM_SPELLS.include?(attack[:name])
+                          caster_owner(attack[:name], chunk_at)
                         end
               eff_foreign = (running[:owner] != :self && !running[:owner].nil?) || nil if running
 
@@ -2480,15 +2487,16 @@ module Lich
           printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
         end
 
-        # Whose Sandstorm a round is, from the storms still running. A storm
-        # fills the room, so the round names its creature but not the caster:
-        # one caster's storm running is theirs; none, or several casters', is
-        # nobody's.
+        # Whose round of a room-filling spell (Sandstorm, Meteor Swarm) this
+        # is, from those still running. The round names its creature but not
+        # the caster: one caster's spell running is theirs; none, or several
+        # casters', is nobody's.
         #
+        # @param name [Symbol] a ROOM_SPELLS entry
         # @param at [Float] the chunk's time
         # @return [Hash] {owner: :self | String | nil, target: nil}
-        def storm_owner(at)
-          owners = running_spells(:sandstorm, at).map { |s| s[:owner] }.uniq
+        def caster_owner(name, at)
+          owners = running_spells(name, at).map { |s| s[:owner] }.uniq
           { owner: owners.size == 1 ? owners.first : nil, target: nil }
         end
 
