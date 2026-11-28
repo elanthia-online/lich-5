@@ -58,7 +58,10 @@ module Lich
         # spell's own rounds plus 2 for a late chunk.
         #   earthen_fury: erupts at the cast and every 2 seconds for the next
         #     10 (six cycles), on the one creature its opening line links.
-        RUNNING_SPELL_SECONDS = { earthen_fury: 12 }.freeze
+        #   sandstorm: strikes the whole room at the cast and again at each
+        #     surge, 3-4 and 6-7 seconds after it (GS4 logs 2026-11-27: 1,293
+        #     of 1,295 surges within 7 seconds); keyed by caster, not creature.
+        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 10 }.freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the
@@ -865,6 +868,9 @@ module Lich
               if seq == :earthen_fury && line_target && line_target[:id]
                 spell_opened(:earthen_fury, line_target[:id], last_caster, chunk_at, line_target)
               end
+              # Sandstorm's only known opening is the caster's own ("at your
+              # feet"), and the storm fills the room, so it is keyed by caster.
+              spell_opened(:sandstorm, :self, :self, chunk_at) if seq == :sandstorm
               if spawn_pending
                 active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
                 spawn_pending = nil
@@ -873,6 +879,7 @@ module Lich
             elsif (seq_end = Parser.parse_sequence_end(line))
               active_sequence = nil if active_sequence == seq_end
               @running_spells.delete([:earthen_fury, line_target[:id]]) if seq_end == :earthen_fury && line_target
+              @running_spells.delete_if { |(spell, _), _| spell == :sandstorm } if seq_end == :sandstorm
               if active_spawn && seq_end == active_spawn[:sequence]
                 respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
                 active_spawn = nil
@@ -1347,7 +1354,11 @@ module Lich
               # of the spell we saw, which overrides the chunk latch either
               # way. With no opening on record it is nobody's (a spell already
               # running when we walked in).
-              running = (fury_owner(attack[:target_name], chunk_at) if attack[:name] == :earthen_fury && attack[:target_name])
+              running = if attack[:name] == :earthen_fury && attack[:target_name]
+                          fury_owner(attack[:target_name], chunk_at)
+                        elsif attack[:name] == :sandstorm
+                          storm_owner(chunk_at)
+                        end
               eff_foreign = (running[:owner] != :self && !running[:owner].nil?) || nil if running
 
               current_event = {
@@ -2455,6 +2466,18 @@ module Lich
           return false if linked.empty?
 
           printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
+        end
+
+        # Whose Sandstorm a round is, from the storms still running. A storm
+        # fills the room, so the round names its creature but not the caster:
+        # one caster's storm running is theirs; none, or several casters', is
+        # nobody's.
+        #
+        # @param at [Float] the chunk's time
+        # @return [Hash] {owner: :self | String | nil, target: nil}
+        def storm_owner(at)
+          owners = running_spells(:sandstorm, at).map { |s| s[:owner] }.uniq
+          { owner: owners.size == 1 ? owners.first : nil, target: nil }
         end
 
         # The room's creature an unlinked target name refers to, when exactly
