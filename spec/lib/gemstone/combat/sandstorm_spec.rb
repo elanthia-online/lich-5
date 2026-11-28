@@ -17,7 +17,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     stub_const('Lich::Common::Events', Module.new)
     allow(Lich::Common::Events).to receive(:emit)
     allow(Lich::Common::Events).to receive(:any_for?).with('combat.attack').and_return(false)
-    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead @running_room].each do |iv|
       described_class.instance_variable_set(iv, nil)
     end
     room(*creatures)
@@ -106,6 +106,23 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     storms(cast)
     later = 100 + described_class::RUNNING_SPELL_SECONDS[:sandstorm] + 1
     expect(storms([surge, *myrmidon_round, prompt(later)]).map { |e| whose(e) }).to eq([:nobodys])
+  end
+
+  it 'keeps a round 15 seconds after our cast ours (a storm lengthened by Elemental Lore - Fire)' do
+    storms(cast)
+    expect(storms([surge, *myrmidon_round, prompt(115)]).map { |e| whose(e) }).to eq([:ours])
+  end
+
+  it 'forgets the storm when we move to another room' do
+    storms(["<nav rm='13041131'/>", prompt(99)])
+    storms(cast)
+    expect(storms(["<nav rm='13041132'/>", surge, *myrmidon_round, prompt(103)]).map { |e| whose(e) }).to eq([:nobodys])
+  end
+
+  it 'keeps the storm when the room is shown again without a move' do
+    storms(["<nav rm='13041131'/>", prompt(99)])
+    storms(cast)
+    expect(storms(["<nav rm='13041131'/>", surge, *myrmidon_round, prompt(103)]).map { |e| whose(e) }).to eq([:ours])
   end
 
   it 'forgets the storm when it blows itself out' do

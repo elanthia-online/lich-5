@@ -58,10 +58,17 @@ module Lich
         # spell's own rounds plus 2 for a late chunk.
         #   earthen_fury: erupts at the cast and every 2 seconds for the next
         #     10 (six cycles), on the one creature its opening line links.
-        #   sandstorm: strikes the whole room at the cast and again at each
-        #     surge, 3-4 and 6-7 seconds after it (GS4 logs 2026-11-27: 1,293
-        #     of 1,295 surges within 7 seconds); keyed by caster, not creature.
-        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 10 }.freeze
+        #   sandstorm: strikes at the cast and twice more, 3 and 6 seconds
+        #     later, while the caster stays in the room; it lingers 10 seconds,
+        #     up to 20 with Elemental Lore - Fire (GS4 release notes, 2026-11),
+        #     and the closing line ends it sooner. Keyed by caster.
+        # Every running spell is forgotten when we change rooms: none of our
+        # spells strikes a room we have left, and whatever strikes the new
+        # room is not ours.
+        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 22 }.freeze
+
+        # The room a <nav> line moves us to.
+        NAV_ROOM_PATTERN = /<nav rm=['"](\d+)['"]/.freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the
@@ -569,6 +576,11 @@ module Lich
 
           lines.each_with_index do |line, index|
             next if line.strip.empty?
+            # A new room: forget the running spells (see RUNNING_SPELL_SECONDS).
+            if (room = line[NAV_ROOM_PATTERN, 1])
+              @running_spells.clear if @running_room && @running_room != room
+              @running_room = room
+            end
             # Room-window components (objs/players) are full of bold creature
             # links; feeding them to the target-switcher spawns phantom events
             # for bystander creatures that were never attacked.

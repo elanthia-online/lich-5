@@ -32,7 +32,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     allow(Lich::Common::Events).to receive(:any_for?).with('combat.attack').and_return(false)
     # cross-chunk state lives in module ivars; never let one example's
     # death watch or held cast leak into another
-    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead @running_room].each do |iv|
       described_class.instance_variable_set(iv, nil)
     end
   end
