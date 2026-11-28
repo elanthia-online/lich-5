@@ -25,6 +25,11 @@ module Lich
         # extract_attacker_from_match)
         OPEN_LINK_TAIL_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)\z/i.freeze
 
+        # Lowercase article + lowercase name, no link: a creature the feed did
+        # not link (Earthen Fury's eruption lines). Players are capitalized
+        # bare names, never this shape.
+        UNLINKED_CREATURE_PATTERN = /\A(?:an?|the|some) (?<name>[a-z][^<>]*?)(?:'s)?\z/.freeze
+
         # Any XML tag (link, bold, preset). Stripping it leaves the text a
         # pattern is matched against; nothing here is rendered as HTML.
         TAG_PATTERN = /<[^>]+>/.freeze
@@ -113,7 +118,17 @@ module Lich
                 # them (real-feed replay, GSIV-Monstr 2025-09-30).
                 if target_info.nil? && match.names.include?('target') &&
                    !match[:target].to_s.strip.empty?
-                  result[:foreign_target] = true
+                  # A capture that reads as a creature but arrived WITHOUT a
+                  # link ("a triton brawler": lowercase article and name; the
+                  # game sends Earthen Fury's eruption lines this way) is not
+                  # a third party. Filing it foreign kept the whole spell off
+                  # the caster's ledger (#2415). Keep the printed name so the
+                  # processor can bind it to the room's creature.
+                  if (creature_name = unlinked_creature_name(match[:target]))
+                    result[:target_name] = creature_name
+                  else
+                    result[:foreign_target] = true
+                  end
                 end
                 # Third-person defs capture the attacker (a player link with
                 # a negative exist id, or a pushBold-wrapped creature link)
@@ -373,6 +388,15 @@ module Lich
             end
 
             nil
+          end
+
+          # @return [String, nil] the creature name an unlinked target capture
+          #   prints ("triton brawler"), or nil if it doesn't read as one
+          def unlinked_creature_name(target_text)
+            text = target_text.to_s
+            return nil if text.include?('<')
+
+            text.strip[UNLINKED_CREATURE_PATTERN, :name]
           end
 
           def extract_target_from_line(line)

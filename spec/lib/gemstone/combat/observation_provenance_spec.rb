@@ -22,7 +22,7 @@ RSpec.describe 'Combat observation provenance' do
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
     stub_const('Lich::Gemstone::Combat::Creature', Class.new { def self.[](_id); end })
-    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @observation_batch_id].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @observation_batch_id @running_spells @spell_victims_dead].each do |iv|
       processor.instance_variable_set(iv, nil)
     end
     events.clear!('combat.')
