@@ -58,7 +58,23 @@ module Lich
         # spell's own rounds plus 2 for a late chunk.
         #   earthen_fury: erupts at the cast and every 2 seconds for the next
         #     10 (six cycles), on the one creature its opening line links.
-        RUNNING_SPELL_SECONDS = { earthen_fury: 12 }.freeze
+        #   sandstorm: strikes at the cast and twice more, 3 and 6 seconds
+        #     later, while the caster stays in the room; it lingers 10 seconds,
+        #     up to 20 with Elemental Lore - Fire (GS4 release notes, 2026-11),
+        #     and the closing line ends it sooner. Keyed by caster.
+        #   meteor_swarm: cycles every 3 seconds from 3 seconds after the
+        #     cast, 2 to 10 of them (GS4 release notes, 2026-11), so up to 30
+        #     seconds; the closing line ends it sooner. Keyed by caster.
+        # Every running spell is forgotten when we change rooms: none of our
+        # spells strikes a room we have left, and whatever strikes the new
+        # room is not ours.
+        RUNNING_SPELL_SECONDS = { earthen_fury: 12, sandstorm: 22, meteor_swarm: 32 }.freeze
+
+        # Running spells that fill the room, keyed by caster (see caster_owner).
+        ROOM_SPELLS = %i[sandstorm meteor_swarm].freeze
+
+        # The room a <nav> line moves us to.
+        NAV_ROOM_PATTERN = /<nav rm=['"](\d+)['"]/.freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the
@@ -566,6 +582,11 @@ module Lich
 
           lines.each_with_index do |line, index|
             next if line.strip.empty?
+            # A new room: forget the running spells (see RUNNING_SPELL_SECONDS).
+            if (room = line[NAV_ROOM_PATTERN, 1])
+              @running_spells.clear if @running_room && @running_room != room
+              @running_room = room
+            end
             # Room-window components (objs/players) are full of bold creature
             # links; feeding them to the target-switcher spawns phantom events
             # for bystander creatures that were never attacked.
@@ -865,6 +886,10 @@ module Lich
               if seq == :earthen_fury && line_target && line_target[:id]
                 spell_opened(:earthen_fury, line_target[:id], last_caster, chunk_at, line_target)
               end
+              # Sandstorm's and Meteor Swarm's only known openings are the
+              # caster's own ("at your feet", "around you"), and both fill the
+              # room, so they are keyed by caster.
+              spell_opened(seq, :self, :self, chunk_at) if ROOM_SPELLS.include?(seq)
               if spawn_pending
                 active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
                 spawn_pending = nil
@@ -873,6 +898,7 @@ module Lich
             elsif (seq_end = Parser.parse_sequence_end(line))
               active_sequence = nil if active_sequence == seq_end
               @running_spells.delete([:earthen_fury, line_target[:id]]) if seq_end == :earthen_fury && line_target
+              @running_spells.delete_if { |(spell, _), _| spell == seq_end } if ROOM_SPELLS.include?(seq_end)
               if active_spawn && seq_end == active_spawn[:sequence]
                 respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
                 active_spawn = nil
@@ -1064,7 +1090,12 @@ module Lich
                 #   multi-strike (flurry: one initiation, five rolls with
                 #   outcomes and damage interleaved) keeps every roll on
                 #   the attack-born event.
-                if sink.nil? && current_event
+                # A Sandstorm or Meteor Swarm round prints its roll BEFORE the
+                # line naming its creature, whatever event is open (a miss on
+                # another creature, a creature's attack on us, the cast): hold
+                # it for that round.
+                room_round_roll = resolution[:type] == :smr && room_spell_round?(lines[index + 1])
+                if sink.nil? && current_event && !room_round_roll
                   maneuver_roll = %i[smr ssr maneuver_roll fear].include?(resolution[:type])
                   born = current_event[:_attack_born]
                   if maneuver_roll
@@ -1347,7 +1378,11 @@ module Lich
               # of the spell we saw, which overrides the chunk latch either
               # way. With no opening on record it is nobody's (a spell already
               # running when we walked in).
-              running = (fury_owner(attack[:target_name], chunk_at) if attack[:name] == :earthen_fury && attack[:target_name])
+              running = if attack[:name] == :earthen_fury && attack[:target_name]
+                          fury_owner(attack[:target_name], chunk_at)
+                        elsif ROOM_SPELLS.include?(attack[:name])
+                          caster_owner(attack[:name], chunk_at)
+                        end
               eff_foreign = (running[:owner] != :self && !running[:owner].nil?) || nil if running
 
               current_event = {
@@ -2455,6 +2490,33 @@ module Lich
           return false if linked.empty?
 
           printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
+        end
+
+        # Whether a line is a round of a room-filling spell (ROOM_SPELLS).
+        #
+        # @param line [String, nil]
+        # @return [Boolean]
+        def room_spell_round?(line)
+          return false if line.nil? || line.strip.empty?
+
+          ROOM_SPELLS.include?(Parser.parse_attack(line)&.dig(:name))
+        end
+
+        # Whose round of a room-filling spell (Sandstorm, Meteor Swarm) this
+        # is, from those still running. The round names its creature but not
+        # the caster, and only our own opening is known, so every entry is
+        # ours (key :self): a round inside our window is ours, one outside it
+        # is nobody's. A nearby player's spell is therefore nobody's only
+        # while ours isn't running; inside our window its rounds count as
+        # ours, and its closing line ends ours early. The several-owners
+        # branch stays for when another caster's opening is known.
+        #
+        # @param name [Symbol] a ROOM_SPELLS entry
+        # @param at [Float] the chunk's time
+        # @return [Hash] {owner: :self | String | nil, target: nil}
+        def caster_owner(name, at)
+          owners = running_spells(name, at).map { |s| s[:owner] }.uniq
+          { owner: owners.size == 1 ? owners.first : nil, target: nil }
         end
 
         # The room's creature an unlinked target name refers to, when exactly

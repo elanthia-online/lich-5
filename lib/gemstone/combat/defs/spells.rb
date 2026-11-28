@@ -80,6 +80,21 @@ module Lich
               /The earth cracks beneath (?<target>[^,]+), releasing a column of frigid air!/,
               /Icy stalagmites burst from the ground beneath (?<target>[^!]+)!/
             ].freeze),
+            # Sandstorm (914), one line per creature, its name never linked
+            # (GS4 logs 2026-11: ~55k each of buffets and scours, ~5k misses).
+            AttackDef.new(:sandstorm, [
+              /The sandstorm (?:buffets|scours) (?<target>.+?) with (?:violent, swirling winds|a blast of sand)!/,
+              /The sandstorm whips around (?<target>.+?), but finds no purchase\./
+            ].freeze),
+            # Meteor Swarm (525), one line per creature hit, linked. The inline
+            # "dealing N damage" and the "... N points of damage!" line that
+            # follows are both dealt (the creature's health drops by each;
+            # GS4 log 2026-11-28: 613 -> 570 -> 550 for "dealing 43" then 20).
+            # Only the indoor "Blazing" wording is captured so far; the lead
+            # word is left open for the outdoor and evoked (ice) forms.
+            AttackDef.new(:meteor_swarm, [
+              /\b[A-Z][a-z-]*(?: [a-z-]+)* meteorite fragments crash down onto (?<target>.+?), dealing \d+ damage!/
+            ].freeze),
             # Sphere descriptors are multi-word ("icy blue", "snapping and
             # crackling"), hence .+? rather than \w+ (round-12 generic table:
             # icy blue 3,497x/14, snapping and crackling 3,315x/15,

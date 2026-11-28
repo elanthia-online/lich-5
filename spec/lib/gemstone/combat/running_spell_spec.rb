@@ -16,7 +16,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     stub_const('Lich::Common::Events', Module.new)
     allow(Lich::Common::Events).to receive(:emit)
     allow(Lich::Common::Events).to receive(:any_for?).with('combat.attack').and_return(false)
-    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @running_spells @spell_victims_dead @running_room].each do |iv|
       described_class.instance_variable_set(iv, nil)
     end
   end

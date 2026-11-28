@@ -338,6 +338,7 @@ module Lich
             # has no "points of" - chunks holding
             # only these were dropped entirely
             '<pushBold/>',              # Creatures
+            "<nav rm=",                 # A move: forgets running spells
             '**',                       # Flares
             'AS:',                      # Attack rolls
             'swing', 'thrust', 'cast', 'gesture',
@@ -355,7 +356,8 @@ module Lich
           # @param line [String] Game line to check
           # @return [Boolean] true if line may contain combat events
           def combat_relevant?(line)
-            COMBAT_RELEVANT_PATTERN.match?(line) || COMBAT_RESOLUTION_PATTERN.match?(line)
+            COMBAT_RELEVANT_PATTERN.match?(line) || COMBAT_RESOLUTION_PATTERN.match?(line) ||
+              Definitions::Attacks.running_round_line?(line)
           end
 
           # Update tracker settings
@@ -539,10 +541,15 @@ module Lich
                 # Substring checks are equivalent to the old backtracking regex
                 # for gating purposes and far cheaper per line.
                 # ...or an environmental / self-inflicted tick, which names no
-                # creature at all (frigid wind, thorn-bow recoil).
+                # creature at all (frigid wind, thorn-bow recoil), or a later
+                # round of a running spell that links none (a Sandstorm surge),
+                # or a move, which forgets the running spells even into an
+                # empty room (the processor finds no events there).
                 if chunk.any? { |line|
                   (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
-                  Definitions::Attacks.attackerless_line?(line)
+                  Definitions::Attacks.attackerless_line?(line) ||
+                  Definitions::Attacks.running_round_line?(line) ||
+                  line.include?('<nav rm=')
                 }
                   process(chunk, source: source) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?

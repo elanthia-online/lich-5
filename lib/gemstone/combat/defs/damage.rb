@@ -55,6 +55,9 @@ module Lich
             /\w+ internal disruption for (?<damage>\d+) points? of damage!/,
             /(?<target>.+?) is struck by a burning projectile, taking (?<damage>\d+) points? of damage!/,
             /Blazing light, hot and blistering, coalesces around (?<target>.+?) for (?<damage>\d+) points? of damage!/,
+            # Meteor Swarm (525): its inline damage is dealt on top of the
+            # "... N points of damage!" line that follows (see spells.rb)
+            /meteorite fragments crash down onto (?<target>.+?), dealing (?<damage>\d+) damage!/,
             # Stone Fist (514) hand actions - inline damage, no "..." prefix
             /The stone hand throws (?<target>.+?) and .+? goes flying through the air, then hits the ground with a loud thud\.\s+(?<damage>\d+) points? of damage!/,
             /The stone hand lets (?<target>.+?) go free for a moment, then quickly moves to slap #{MK_PRE}(?:him|her|it)#{MK_POST}\.\s*(?<damage>\d+) points? of damage!/,
