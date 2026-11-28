@@ -776,6 +776,21 @@ module Lich
                         Supplements.attacks(:third_person) +
                         THIRD_PERSON_SPELL_ATTACKS + THIRD_PERSON_ATTACKS).freeze
 
+          # Rounds of spells that keep striking after the cast and name their
+          # creature in plain text (Earthen Fury, Sandstorm) or carry the
+          # spell's only trace in a later chunk (Meteor Swarm). The tracker's
+          # chunk gate needs a bolded creature link, so a later round with
+          # none was dropped before the processor saw it; this union lets
+          # such a chunk through (see Processor::RUNNING_SPELL_SECONDS).
+          RUNNING_SPELL_ROUNDS = %i[earthen_fury sandstorm meteor_swarm].freeze
+          RUNNING_ROUND_PATTERN = Regexp.union(
+            ALL_ATTACKS.select { |attack_def| RUNNING_SPELL_ROUNDS.include?(attack_def.name) }.flat_map(&:patterns)
+          ).freeze
+
+          def self.running_round_line?(line)
+            RUNNING_ROUND_PATTERN.match?(line)
+          end
+
           # Create lookup table for fast pattern matching
           ATTACK_LOOKUP = ALL_ATTACKS.flat_map do |attack_def|
             attack_def.patterns.compact.map { |pattern| [pattern, attack_def.name] }

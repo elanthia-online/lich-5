@@ -81,6 +81,21 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       .to eq([[31_726_976, [45], :ours], [31_721_305, [5], :ours], [31_730_293, [50], :ours]])
   end
 
+  def rolls(e) = e[:resolutions].map { |r| r[:total] || r[:result] }
+
+  it "gives each round its own roll, and leaves the wand's event only its own" do
+    events = described_class.parse_events(cast, include_attack_events: true)
+    expect(events.select { |e| %i[wand sandstorm].include?(e[:name]) }.map { |e| [e[:name], rolls(e)] })
+      .to eq([[:wand, [433]], [:sandstorm, [217]], [:sandstorm, [102]], [:sandstorm, [218]]])
+  end
+
+  it 'gives a round its own roll when a miss on another creature comes first' do
+    storms(cast)
+    miss = "The sandstorm whips around #{aimed}, but finds no purchase."
+    events = storms([surge, '[SMR result: 99 (Open d100: 26)]', miss, *myrmidon_round, prompt(103)])
+    expect(events.map { |e| [e[:target][:id], rolls(e)] }).to eq([[31_726_976, [99]], [31_721_305, [102]]])
+  end
+
   it 'keeps the storm damage off the creature the wand aimed at' do
     wand = described_class.parse_events(cast, include_attack_events: true).find { |e| e[:name] == :wand }
     expect(wand[:hits]).to be_empty

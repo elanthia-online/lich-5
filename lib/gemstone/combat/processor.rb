@@ -1090,7 +1090,12 @@ module Lich
                 #   multi-strike (flurry: one initiation, five rolls with
                 #   outcomes and damage interleaved) keeps every roll on
                 #   the attack-born event.
-                if sink.nil? && current_event
+                # A Sandstorm or Meteor Swarm round prints its roll BEFORE the
+                # line naming its creature, whatever event is open (a miss on
+                # another creature, a creature's attack on us, the cast): hold
+                # it for that round.
+                room_round_roll = resolution[:type] == :smr && room_spell_round?(lines[index + 1])
+                if sink.nil? && current_event && !room_round_roll
                   maneuver_roll = %i[smr ssr maneuver_roll fear].include?(resolution[:type])
                   born = current_event[:_attack_born]
                   if maneuver_roll
@@ -2487,10 +2492,24 @@ module Lich
           printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
         end
 
+        # Whether a line is a round of a room-filling spell (ROOM_SPELLS).
+        #
+        # @param line [String, nil]
+        # @return [Boolean]
+        def room_spell_round?(line)
+          return false if line.nil? || line.strip.empty?
+
+          ROOM_SPELLS.include?(Parser.parse_attack(line)&.dig(:name))
+        end
+
         # Whose round of a room-filling spell (Sandstorm, Meteor Swarm) this
         # is, from those still running. The round names its creature but not
-        # the caster: one caster's spell running is theirs; none, or several
-        # casters', is nobody's.
+        # the caster, and only our own opening is known, so every entry is
+        # ours (key :self): a round inside our window is ours, one outside it
+        # is nobody's. A nearby player's spell is therefore nobody's only
+        # while ours isn't running; inside our window its rounds count as
+        # ours, and its closing line ends ours early. The several-owners
+        # branch stays for when another caster's opening is known.
         #
         # @param name [Symbol] a ROOM_SPELLS entry
         # @param at [Float] the chunk's time

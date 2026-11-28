@@ -58,6 +58,11 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       .to eq([[6_936_599, [43, 20], :ours], [6_941_623, [47, 20], :ours]])
   end
 
+  it 'gives each hit the roll printed before it' do
+    meteors(cast)
+    expect(meteors([*cycle, prompt(103)]).map { |e| e[:resolutions].map { |r| r[:total] || r[:result] } }).to eq([[144], [155]])
+  end
+
   it 'keeps a cycle late in the swarm ours (up to ten cycles, one every 3 seconds)' do
     meteors(cast)
     expect(meteors([*later, prompt(129)]).map { |e| whose(e) }).to eq(%i[ours ours])
