@@ -59,7 +59,7 @@ RSpec.describe 'unlinked creature targets' do
     def room(*creatures)
       registry = Class.new do
         define_singleton_method(:in_room) { |*_filters| creatures }
-        define_singleton_method(:[]) { |_id| nil }
+        define_singleton_method(:[]) { |id| creatures.find { |c| c.id == id } }
       end
       stub_const('Lich::Gemstone::Combat::Creature', registry)
     end
@@ -120,6 +120,34 @@ RSpec.describe 'unlinked creature targets' do
                     '[SMR result: 195 (Open d100: 87, Bonus: 57)]', '   ... 35 points of damage!',
                     %(   Massive blow removes <pushBold/>the <a exist="2" noun="warg">giant warg</a><popBold/>'s right foot!)]
       expect(described_class.parse_events(warg_chunk).first[:target][:id]).to eq(2)
+    end
+
+    it "adopts a short-name link the registry doesn't know, by the tail of the printed name" do
+      room(brawler.new(1, 'warg', 'niveous giant warg'), brawler.new(2, 'warg', 'niveous giant warg'))
+      warg_chunk = ['Craggy debris explodes from the ground beneath a niveous giant warg!',
+                    '[SMR result: 195 (Open d100: 87, Bonus: 57)]', '   ... 35 points of damage!',
+                    %(   Massive blow removes <pushBold/>the <a exist="9" noun="warg">giant warg</a><popBold/>'s right foot!)]
+      expect(described_class.parse_events(warg_chunk).first[:target][:id]).to eq(9)
+    end
+
+    context 'with a creature whose whole name is the tail of the printed one' do
+      before do
+        room(brawler.new(1, 'reiver', 'burly reiver'), brawler.new(2, 'reiver', 'burly reiver'), brawler.new(5, 'reiver', 'reiver'))
+      end
+
+      let(:reiver_chunk) do
+        ['Craggy debris explodes from the ground beneath a burly reiver!', '[SMR result: 195 (Open d100: 87, Bonus: 57)]', '   ... 35 points of damage!']
+      end
+
+      it 'does not adopt that different creature' do
+        events = described_class.parse_events(reiver_chunk + ['   The <pushBold/><a exist="5" noun="reiver">reiver</a><popBold/> is stunned!'])
+        expect(events.first[:target][:id]).to be_nil
+      end
+
+      it "still adopts a crit line's short-name link to a burly reiver" do
+        crit = %(   Massive blow removes <pushBold/>the <a exist="2" noun="reiver">reiver</a><popBold/>'s right foot!)
+        expect(described_class.parse_events(reiver_chunk + [crit]).first[:target][:id]).to eq(2)
+      end
     end
   end
 end

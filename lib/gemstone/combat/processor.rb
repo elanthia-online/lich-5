@@ -973,7 +973,7 @@ module Lich
                 respond "[Combat] Switched to target: #{line_target[:name]} (#{line_target[:id]})" if Tracker.debug?(:verbose)
 
               elsif current_target.nil? && current_event[:target_name] &&
-                    !names_same_creature?(current_event[:target_name], line_target[:name])
+                    !names_same_creature?(current_event[:target_name], line_target)
                 # An unlinked target name the room couldn't resolve: a line
                 # naming a DIFFERENT creature is not this event's victim. A
                 # crit line's short name ("the giant warg's right foot" for a
@@ -2437,14 +2437,21 @@ module Lich
         end
 
         # Whether a link's name can be the creature an unlinked target name
-        # printed: the same name, or its tail (crit lines link a short name,
-        # "giant warg" for "niveous giant warg").
+        # printed. The link carries the creature's id, so when the registry
+        # knows it, its full name decides: a plain "reiver" is not a "burly
+        # reiver", though its name is the tail of one. Only for a creature the
+        # registry doesn't know does the link's own text decide: the same
+        # name, or its tail (crit lines link a short name, "giant warg" for
+        # "niveous giant warg").
         #
         # @param printed [String] the unlinked name, article removed
-        # @param linked [String, nil] the link's name
+        # @param link [Hash] the line's target: :id and :name
         # @return [Boolean]
-        def names_same_creature?(printed, linked)
-          linked = linked.to_s.strip
+        def names_same_creature?(printed, link)
+          known = link[:id] && defined?(Creature) && Creature.respond_to?(:[]) && Creature[link[:id].to_i]&.name
+          return printed.casecmp?(known.to_s) if known
+
+          linked = link[:name].to_s.strip
           return false if linked.empty?
 
           printed.casecmp?(linked) || printed.downcase.end_with?(" #{linked.downcase}")
